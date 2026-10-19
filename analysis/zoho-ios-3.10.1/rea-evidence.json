@@ -1,0 +1,970 @@
+[
+  {
+    "evidence_id": "ev_2b65d5e1dbb2509e193059206f68946009b437567b6b943a0fc3c91caff9fa16",
+    "subject": {
+      "name": "ZohoMail.ipa",
+      "digest": {
+        "sha256": "3d526423855d48f9ce2177a99443764c92b1acc3428f30320caae76c0ee2e5cb"
+      },
+      "local_path": "/Users/cavon/Downloads/ZohoMail.ipa",
+      "format": "ipa",
+      "architecture": null
+    },
+    "provider": {
+      "id": "rea-analysis-view",
+      "name": "REA analysis view projection",
+      "version": "1"
+    },
+    "analysis_profile": null,
+    "predicate_type": "rea.analysis-view",
+    "operation": "inspect_analysis_view",
+    "parameters": {
+      "parent_evidence_id": "ev_a2c9b4e91e26761dab6e55653be82915b2b6e46cc9f469c8e23603069d4d469a",
+      "view": {
+        "kind": "summary"
+      }
+    },
+    "raw_result": null,
+    "normalized_result": {
+      "kind": "summary",
+      "view": {
+        "kind": "summary"
+      },
+      "parent_evidence_id": "ev_a2c9b4e91e26761dab6e55653be82915b2b6e46cc9f469c8e23603069d4d469a",
+      "parent_operation": "inspect_artifact",
+      "parent_digest": "a2c9b4e91e26761dab6e55653be82915b2b6e46cc9f469c8e23603069d4d469a",
+      "view_digest": "54b64be549fce24785bce013cb87a596b16fe44639cd0795c3ebc7be4715c529",
+      "artifact": {
+        "path": "/Users/cavon/Downloads/ZohoMail.ipa",
+        "sha256": "3d526423855d48f9ce2177a99443764c92b1acc3428f30320caae76c0ee2e5cb"
+      },
+      "coverage": {
+        "status": "complete-within-view",
+        "examined": 17145,
+        "total": 17145,
+        "next_offset": null,
+        "exhausted": true
+      },
+      "limitations": [
+        "Inspection derives bounded static hypotheses and next probes; it does not execute the artifact or claim format-specific semantics.",
+        "ZIP inventory lists central-directory entries only. Non-entry bytes, including an APK Signing Block before the central directory or a ZIP comment after it, are not occurrences."
+      ],
+      "unknowns": [
+        "Inventory does not establish application runtime behavior or complete format-specific analysis."
+      ],
+      "summary": {
+        "manifest": {
+          "manifest_id": "agm_dd1fa411bfa8c4df75c9391abe2b37c2569205e4acc2a3bfdbf1e6ab43516137",
+          "root_artifact_id": "art_50eb63d58cbbd4cd66fd167d64b88220bbefe5481bafec982f5fde463e21aa84",
+          "root_sha256": "3d526423855d48f9ce2177a99443764c92b1acc3428f30320caae76c0ee2e5cb",
+          "root_format": "ipa",
+          "graph_sha256": "a4dec138d370a89931bc05df44f0c45662bf8b42c097eec4d67a9402f72704b5",
+          "node_count": 3486,
+          "occurrence_count": 6830,
+          "edge_count": 6829
+        },
+        "available_counts": {
+          "nodes": 3486,
+          "occurrences": 6830,
+          "edges": 6829,
+          "integrity_contradictions": 0
+        },
+        "observed_entry_kind_counts": {
+          "file": 4242,
+          "directory": 2588,
+          "symlink": 0,
+          "slice": 0
+        },
+        "source_complete": true,
+        "inventory_evidence_ids": [
+          "ev_c8fd1215dfe9d331f27df4eb3376a03966a76b4ac282c1e61e9877e8c4ffb2c6"
+        ],
+        "inspection": {
+          "coverage": {
+            "status": "complete-within-substeps",
+            "substeps_completed": 1,
+            "observations_retained": 1,
+            "observations_omitted": 0,
+            "hypotheses_retained": 0,
+            "hypotheses_omitted": 0,
+            "unexplored_branches_retained": 0,
+            "unexplored_branches_omitted": 0,
+            "next_probes_retained": 0,
+            "next_probes_omitted": 0
+          },
+          "unexplored_branches": []
+        },
+        "limitation_count": 2
+      }
+    },
+    "confidence": "derived",
+    "authority": "shipped-artifact",
+    "environment": null,
+    "limitations": [
+      "Inspection derives bounded static hypotheses and next probes; it does not execute the artifact or claim format-specific semantics.",
+      "ZIP inventory lists central-directory entries only. Non-entry bytes, including an APK Signing Block before the central directory or a ZIP comment after it, are not occurrences."
+    ],
+    "relationship_coverage": null,
+    "locations": [
+      {
+        "kind": "artifact-path",
+        "path": "/Users/cavon/Downloads/ZohoMail.ipa"
+      }
+    ],
+    "evidence_links": [
+      "ev_a2c9b4e91e26761dab6e55653be82915b2b6e46cc9f469c8e23603069d4d469a"
+    ]
+  },
+  {
+    "evidence_id": "ev_f57a6fce133bbaa5ab1d7807ea4c66b985e1d4fa307cc279cee5cf2f7a89bbe2",
+    "operation": "inspect_plist",
+    "subject": {
+      "name": "ZohoMail.ipa",
+      "digest": {
+        "sha256": "3d526423855d48f9ce2177a99443764c92b1acc3428f30320caae76c0ee2e5cb"
+      },
+      "local_path": "/Users/cavon/Downloads/ZohoMail.ipa",
+      "format": "ipa",
+      "architecture": null
+    },
+    "bundle": {
+      "identifier": "com.zoho.zmail",
+      "executable": "Zoho Mail",
+      "name": "Zoho Mail",
+      "version": "478",
+      "short_version": "3.10.1"
+    },
+    "limitations": []
+  },
+  {
+    "evidence_id": "ev_da7d6380c39d73737c0dbf625cd23cec6bead523b93289c1ef87f88e957084b0",
+    "subject": {
+      "name": "Zoho Mail",
+      "digest": {
+        "sha256": "f00473aaac88fe8ccda0238df5afad202424e9497861e6da9e8c059216d0e817"
+      },
+      "local_path": "/private/var/folders/fn/g9dndcfj751bh8w7rprn8lx40000gn/T/rea-extracted-888dd316-bdc4-4129-b674-8f626614b3cc/Payload/Zoho Mail.app/Zoho Mail",
+      "format": "mach-o",
+      "architecture": "arm64"
+    },
+    "provider": {
+      "id": "rea-analysis-view",
+      "name": "REA analysis view projection",
+      "version": "1"
+    },
+    "analysis_profile": null,
+    "predicate_type": "rea.analysis-view",
+    "operation": "inspect_analysis_view",
+    "parameters": {
+      "parent_evidence_id": "ev_621dbe9dadaac3591334fb63ab36bdac5b851c727eaf7f74ce990aa4d693b366",
+      "view": {
+        "kind": "summary"
+      }
+    },
+    "raw_result": null,
+    "normalized_result": {
+      "kind": "summary",
+      "view": {
+        "kind": "summary"
+      },
+      "parent_evidence_id": "ev_621dbe9dadaac3591334fb63ab36bdac5b851c727eaf7f74ce990aa4d693b366",
+      "parent_operation": "inspect_macho",
+      "parent_digest": "621dbe9dadaac3591334fb63ab36bdac5b851c727eaf7f74ce990aa4d693b366",
+      "view_digest": "de087625bcb4d4a4e4279d0ad74c3bfbe52170f47453c55995068bf58e51ec5d",
+      "artifact": {
+        "path": "/private/var/folders/fn/g9dndcfj751bh8w7rprn8lx40000gn/T/rea-extracted-888dd316-bdc4-4129-b674-8f626614b3cc/Payload/Zoho Mail.app/Zoho Mail",
+        "sha256": "f00473aaac88fe8ccda0238df5afad202424e9497861e6da9e8c059216d0e817"
+      },
+      "coverage": {
+        "status": "complete-within-view",
+        "examined": 5048,
+        "total": 5048,
+        "next_offset": null,
+        "exhausted": true
+      },
+      "limitations": [
+        "Imports and exports combine dyld_info and nm; stripped or toolchain-hidden symbols may be absent.",
+        "Merged nm/dyld_info results may be incomplete for stripped binaries.",
+        "dyld_info textual imports may omit chained or toolchain-unsupported metadata.",
+        "vtool output is retained as provenance but only otool build metadata is normalized."
+      ],
+      "unknowns": [
+        "Native tools did not report exhaustive imports, exports; page exhaustion does not establish absence of unreturned rows."
+      ],
+      "summary": {
+        "format": "mach-o",
+        "selected_architecture": {
+          "name": "arm64",
+          "container_file_offset": 0
+        },
+        "endian": "little",
+        "word_size": 64,
+        "file_type": "2",
+        "flags": [
+          "0x00210085"
+        ],
+        "uuid": "E2C3E884-72D9-3FFE-9B0B-882B3B036014",
+        "collections": {
+          "entrypoints": {
+            "returned": 1,
+            "total": 1,
+            "exhaustive": true
+          },
+          "architectures": {
+            "returned": 1,
+            "total": 1,
+            "exhaustive": true
+          },
+          "build_metadata": {
+            "returned": 1,
+            "total": 1,
+            "exhaustive": true
+          },
+          "load_commands": {
+            "returned": 115,
+            "total": 115,
+            "exhaustive": true
+          },
+          "dependencies": {
+            "returned": 94,
+            "total": 94,
+            "exhaustive": true
+          },
+          "imports": {
+            "returned": 4830,
+            "total": null,
+            "exhaustive": false
+          },
+          "exports": {
+            "returned": 1,
+            "total": null,
+            "exhaustive": false
+          },
+          "segments": {
+            "returned": 5,
+            "total": 5,
+            "exhaustive": true
+          }
+        },
+        "provenance_count": 7,
+        "limitation_count": 4
+      }
+    },
+    "confidence": "derived",
+    "authority": "shipped-artifact",
+    "environment": null,
+    "limitations": [
+      "Imports and exports combine dyld_info and nm; stripped or toolchain-hidden symbols may be absent.",
+      "Merged nm/dyld_info results may be incomplete for stripped binaries.",
+      "dyld_info textual imports may omit chained or toolchain-unsupported metadata.",
+      "vtool output is retained as provenance but only otool build metadata is normalized."
+    ],
+    "relationship_coverage": null,
+    "locations": [
+      {
+        "kind": "artifact-path",
+        "path": "/private/var/folders/fn/g9dndcfj751bh8w7rprn8lx40000gn/T/rea-extracted-888dd316-bdc4-4129-b674-8f626614b3cc/Payload/Zoho Mail.app/Zoho Mail"
+      }
+    ],
+    "evidence_links": [
+      "ev_621dbe9dadaac3591334fb63ab36bdac5b851c727eaf7f74ce990aa4d693b366"
+    ]
+  },
+  {
+    "evidence_id": "ev_f4d624b660a34d6bd6930fb21e57ee22b9aaad971849109bdafedaaec11172be",
+    "subject": {
+      "name": "Zoho Mail",
+      "digest": {
+        "sha256": "f00473aaac88fe8ccda0238df5afad202424e9497861e6da9e8c059216d0e817"
+      },
+      "local_path": "/private/var/folders/fn/g9dndcfj751bh8w7rprn8lx40000gn/T/rea-extracted-888dd316-bdc4-4129-b674-8f626614b3cc/Payload/Zoho Mail.app/Zoho Mail",
+      "format": "mach-o",
+      "architecture": "arm64"
+    },
+    "provider": {
+      "id": "native-macos",
+      "name": "macOS native inspection utilities",
+      "version": null
+    },
+    "analysis_profile": null,
+    "predicate_type": "rea.analysis",
+    "operation": "inspect_plist",
+    "parameters": {
+      "path": "/var/folders/fn/g9dndcfj751bh8w7rprn8lx40000gn/T/rea-extracted-888dd316-bdc4-4129-b674-8f626614b3cc/Payload/Zoho Mail.app/ZMLoginStrings.bundle/zh-Hans.lproj/Localizable.strings"
+    },
+    "raw_result": null,
+    "normalized_result": {
+      "format": "binary",
+      "value": {
+        "feedbackSubmissionThankyou_toast": "感谢您提交反馈！",
+        "installMDM_alertButton": "安装",
+        "businessEmail": "企业邮箱",
+        "createMailbox_button": "新建",
+        "personalEmailSubtitleMessage": "创建免费个人邮箱账户",
+        "unable_to_create_account_contact_support_message": "我们目前无法建立您的账户。请联系 %@。",
+        "onBoardingInbox_label": "不止是收件箱",
+        "installMDM_alertMessage": "检测到您从应用商店下载了 Zoho Mail。根据机构策略，该邮箱账户需通过 MDM 渠道下载安装。",
+        "businessEmailSubtitleMessage": "通过Mail Admin应用为机构创建账户。",
+        "username_placeholder": "用户名",
+        "accountAdded_toast": "客户已添加",
+        "invalidUsername_message": "用户名无效",
+        "removeSessions_alertActionButton": "移除",
+        "usernameAlreadyExists_message": "用户名已存在。请尝试其他用户名注册。",
+        "refreshTokenLimitExceeded_alertMessage": "已达最大登录设备数，请前往 accounts.zoho.com.cn 清理后再登录。",
+        "mdmTokenMismatch_alertMessage": "您未获授权在此设备上访问 Zoho Mail。请联系管理员。",
+        "onBoardingCalendar_label": "日历多视图已集成",
+        "nonMDMAccount_alertMessage": "MDM应用策略已限制访问个人邮箱账户。",
+        "personalEmail": "个人邮箱",
+        "signIn_button": "登录",
+        "usernameValidationRule_message": "用户名长度为 6 到 30 个字符，可以包含字母数字、下划线和句号。",
+        "invalidUsernameCharacters_message": "仅允许使用字母、数字、下划线和英文句点",
+        "invalidUsernameMaxLength_message": "最大字符长度为 30",
+        "onBoardingUnifiedInbox_label": "一个收件箱统一管理所有Zoho邮箱",
+        "mdmRemoteWipe_alertMessage": "您在此设备上访问该应用程序受到限制。请联系机构管理员以了解更多详情。",
+        "onBoardingPrivate_label": "私密、安全、无广告",
+        "createNewMailBox_title": "新建邮箱",
+        "refreshTokenLimitExceeded_alertTitle": "无法登录",
+        "invalidUsernameMinLength_message": "至少输入 6 个字符",
+        "dontHaveAnAccount_label": "没有账户？",
+        "signUp_button": "注册",
+        "enterPreferredUsername_subtitle": "请为您的邮箱账户设置首选用户名",
+        "signInError_toast": "登录时出错。"
+      },
+      "bundle": {
+        "identifier": null,
+        "executable": null,
+        "name": null,
+        "version": null,
+        "short_version": null
+      },
+      "source_path": "/var/folders/fn/g9dndcfj751bh8w7rprn8lx40000gn/T/rea-extracted-888dd316-bdc4-4129-b674-8f626614b3cc/Payload/Zoho Mail.app/ZMLoginStrings.bundle/zh-Hans.lproj/Localizable.strings",
+      "provenance": [
+        {
+          "tool": "file",
+          "command": [
+            "/usr/bin/file",
+            "-b",
+            "$PLIST"
+          ],
+          "tool_version": null,
+          "version_reason": "Tool exposes no uniform stable version flag; executable SHA-256 is a prelaunch file sample and does not prove atomic OS image binding.",
+          "executable_sha256": "8014815e1028410f48966f1880f99c842a5678cf2fcaa010e8d7e9e498f651d0",
+          "exit": {
+            "code": 0,
+            "signal": null
+          },
+          "stdout_bytes": 27,
+          "stderr_bytes": 0
+        },
+        {
+          "tool": "plutil",
+          "command": [
+            "/usr/bin/plutil",
+            "-convert",
+            "json",
+            "-o",
+            "-",
+            "--",
+            "$PLIST"
+          ],
+          "tool_version": null,
+          "version_reason": "Tool exposes no uniform stable version flag; executable SHA-256 is a prelaunch file sample and does not prove atomic OS image binding.",
+          "executable_sha256": "5ec63ed0506b7676b30fe69d00ae48c689daf1badc1e786a18166b01b615e8ac",
+          "exit": {
+            "code": 0,
+            "signal": null
+          },
+          "stdout_bytes": 2178,
+          "stderr_bytes": 0
+        }
+      ],
+      "limitations": []
+    },
+    "confidence": "observed",
+    "authority": "shipped-artifact",
+    "environment": null,
+    "limitations": [],
+    "relationship_coverage": null,
+    "locations": [
+      {
+        "kind": "artifact-path",
+        "path": "/var/folders/fn/g9dndcfj751bh8w7rprn8lx40000gn/T/rea-extracted-888dd316-bdc4-4129-b674-8f626614b3cc/Payload/Zoho Mail.app/ZMLoginStrings.bundle/zh-Hans.lproj/Localizable.strings"
+      }
+    ],
+    "evidence_links": []
+  },
+  {
+    "evidence_id": "ev_c7acc30cd058b598b1cba675f2b1cfdae7122baf25360279218487f53d22eafd",
+    "subject": {
+      "name": "Zoho Mail",
+      "digest": {
+        "sha256": "f00473aaac88fe8ccda0238df5afad202424e9497861e6da9e8c059216d0e817"
+      },
+      "local_path": "/private/var/folders/fn/g9dndcfj751bh8w7rprn8lx40000gn/T/rea-extracted-888dd316-bdc4-4129-b674-8f626614b3cc/Payload/Zoho Mail.app/Zoho Mail",
+      "format": "mach-o",
+      "architecture": "arm64"
+    },
+    "provider": {
+      "id": "native-macos",
+      "name": "macOS native inspection utilities",
+      "version": null
+    },
+    "analysis_profile": null,
+    "predicate_type": "rea.analysis",
+    "operation": "inspect_plist",
+    "parameters": {
+      "path": "/var/folders/fn/g9dndcfj751bh8w7rprn8lx40000gn/T/rea-extracted-888dd316-bdc4-4129-b674-8f626614b3cc/Payload/Zoho Mail.app/ZMMailStrings.bundle/zh-Hans.lproj/Localizable.strings"
+    },
+    "raw_result": null,
+    "normalized_result": {
+      "format": "binary",
+      "value": {
+        "banner_outboxOffline": "您当前离线，恢复网络后邮件将自动发送。",
+        "alert_dialog_trust_user_positive_button_text": "无条件信任",
+        "title_tags": "标签",
+        "toast_tagDeleted": "标签已删除",
+        "formal_Title": "正式",
+        "title_noMessagePreview": "无消息预览",
+        "title_selected": "%d 已选定",
+        "title_trash": "回收站",
+        "alert_emptyTitle": "是否清空“%@”？",
+        "button_createStr": "创建“%@”",
+        "title_info": "信息",
+        "tooltip_text_bimi_brand_prefix": "Zoho Mail使用",
+        "spam_alert_system_marked_phishing_message": "来自 %@ 的邮件可能是一封网络钓鱼电子邮件。 因此，请务必谨慎操作，不要随意下载该邮件中的附件或单击其中的任何链接或共享敏感数据给发件人。",
+        "toast_unableToEditTag": "无法编辑标签",
+        "title_cc": "抄送",
+        "title_unread": "未读",
+        "delivery_status_desc_delivered": "邮件已投递到收件人的服务器。",
+        "alert_dialog_trust_sender_title": "信任此发送者",
+        "title_emailWithReminderType": "带提醒类型的电子邮件",
+        "generating_content_error_occurred_subtext": "生成内容时发生未知错误。请稍后重试。",
+        "button_editFolder": "编辑文件夹",
+        "toast_tagEdited": "标签已编辑",
+        "title_includeSpamTrash": "包含垃圾邮件/回收站",
+        "option_read": "已读",
+        "button_saveThisSearch": "保存此搜索",
+        "toast_recall_initiated": "正在撤回邮件…",
+        "button_createFolder": "创建文件夹",
+        "title_subject_doesnot_contains": "主题不包含",
+        "banner_snoozedUntil": "邮件已延迟至 %@",
+        "toast_scrubDeleting": "正在准备批量删除邮件",
+        "option_flagAsImportant": "标记为重要",
+        "title_toOthersRecipientString": "%@ 及另外 %d 个",
+        "generatingContent_Title": "正在生成内容…",
+        "title_priority": "优先级",
+        "toast_scrubArchiveScheduleFailed": "无法归档所选邮箱地址的全部邮件",
+        "title_saved": "已保存",
+        "delivery_status_desc_queued": "邮件在队列内，正在等待处理。",
+        "title_thisMonth": "本月",
+        "alert_saveSearchTitle": "保存搜索",
+        "tooltip_text_bimi_first_line": "此电子邮件经验证来自拥有所示徽标和域名 <b>%@</b> 的品牌。",
+        "verifiedOrgUser_message": "该邮件由机构用户通过Zoho Mail发送，发件人与域名均已完成验证。",
+        "delivery_status_title_recall_in_progress": "正在召回",
+        "title_replied": "已回复",
+        "alert_scrubPicker": "%@ 文件夹中来自以下所选电子邮件地址的电子邮件可批量归档或删除。",
+        "title_low": "低",
+        "title_allMessages": "所有邮件",
+        "title_conversationsCount": "%d 个对话",
+        "title_notFrom": "发件人不包含",
+        "delivery_status_desc_recall_failed": "召回失败：邮件无法召回。",
+        "spam_alert_virus_status_title": "警告：病毒告警",
+        "title_outbox": "发件箱",
+        "alert_dialog_unblock_user_positive_button_text": "无条件解除阻止",
+        "unblock_toast_message": "已移出拦截列表",
+        "title_tag": "标签",
+        "menu_appearance": "外观",
+        "preferences_Title": "偏好设置",
+        "alert_message_recall_confirmation": "召回就是从收件人账户中删除该电子邮件的副本（如果未被删除或共享）。但是，收件人将收到有关召回尝试的通知。",
+        "alert_accountDoesNotExistTitle": "账户不存在",
+        "tooltip_summarise_title": "邮件摘要",
+        "option_customizeSwipe": "自定义滑动",
+        "option_unpin": "取消置顶",
+        "title_undisclosed": "身份不明",
+        "toast_scrubArchiveScheduled": "已归档所选邮箱地址的全部邮件",
+        "spam_alert_self_domain_mail_message": "这是自动生成的电子邮件，只在您的机构内部发送。",
+        "alert_frwdAsAttachThreadExceeded": "您只能转发 10 个对话。请取消选择一些内容并重试。",
+        "title_inbox": "收件箱",
+        "title_filters": "过滤器",
+        "delivery_status_desc_sending": "已清除队列中的邮件，正在投递。",
+        "translate_errorFailedToastMessage": "无法翻译",
+        "model_Title": "模型",
+        "title_results": "结果",
+        "button_createTag": "创建标签",
+        "elaborate_Title": "展开",
+        "spam_alert_button_block_sender": "阻止发送者",
+        "title_partially_recalled": "部分召回",
+        "toast_securePassModified": "已修改访问权限",
+        "tone_Title": "铃声",
+        "title_attachmentName": "附件名称",
+        "delegated_write": "撰写权限",
+        "option_editAsNew": "另存为新邮件编辑",
+        "title_allInboxes": "所有收件箱",
+        "button_deselectAll": "取消全选",
+        "spam_alert_org_rule_based_alert_title": "警告：已被您组织的规则标记",
+        "title_unifiedInbox": "统一收件箱",
+        "option_markAsRead": "标记为已读",
+        "alert_tagExists": "该标签名称已存在",
+        "delivery_status_view_title": "投递状态",
+        "title_toCc": "收件人/抄送",
+        "toast_folderCreated": "文件夹已创建",
+        "verifiedDomain_message": "此邮件来自您的机构域名，且该域名已完成验证。",
+        "title_noEmailsIn": "%@ 中没有电子邮件",
+        "alert_invalidFolderNameTitle": "文件夹名称无效",
+        "option_pin": "置顶",
+        "title_flagged": "已标记",
+        "toast_unableToDeleteFolder": "无法删除文件夹",
+        "alert_tagNameExceeds": "标签名称最长为25个字符",
+        "delegation_account_switch_message": "您当前正在使用 %@ 权限访问 %@ 的邮箱。",
+        "option_unflag": "取消标记",
+        "title_sizeInMB": "大小 (MB)",
+        "menu_summaryNone": "无",
+        "title_emailBody": "电子邮件正文",
+        "delivery_status_title_in_progress": "处理中",
+        "title_tracking": "跟踪",
+        "spam_alert_system_marked_phishing_title": "警告：网络钓鱼告警",
+        "toast_tagCreated": "已创建标签",
+        "title_withComments": "包含评论",
+        "toast_securePassModifyFail": "无法修改访问权限",
+        "informal_Title": "非正式",
+        "option_deleteForever": "永久删除",
+        "spam_action_menu_block_and_reject_future_mails": "阻止并拒绝将来的邮件",
+        "regenerating_content": "正在重新生成内容…",
+        "toast_securePassRevokeFail": "无法撤销访问权限",
+        "spam_alert_virus_status_message": "来自 %@ 的邮件包含了感染病毒的附件。因此，请务必谨慎操作，不要随意下载该邮件中的附件或单击其中的任何链接或共享敏感数据给发件人。",
+        "title_recalled": "已召回",
+        "title_snoozed": "已延迟",
+        "editPrompt_Title": "编辑提示词",
+        "title_recipients": "收件人",
+        "title_spam": "垃圾邮件",
+        "translate_bannerViewTranslate": "查看译文",
+        "delegate_Account_action_permission_denied": "您的权限不够，不能进行该操作",
+        "title_readReceipt": "已读回执",
+        "alert_folderNameExists": "文件夹名已存在",
+        "alert_title_recall_confirmation": "撤回邮件？",
+        "tooltip_pinEmails_title": "置顶邮件",
+        "tooltip_translateEmails_title": "翻译邮件",
+        "title_suggestions": "建议",
+        "toast_unableToCreateFolder": "无法创建文件夹",
+        "spam_alert_why_is_this_email_marked_as_spam": "为什么这封邮件被标记为垃圾邮件？",
+        "option_deleteTag": "删除标签",
+        "delivery_status_desc_partially_recalled": "部分邮件无法召回。",
+        "unable_to_generate_content": "无法生成内容",
+        "toast_markedAsUnread": "已标记为未读",
+        "button_loadMoreMails": "加载更多邮件",
+        "toast_scrubDeleteScheduled": "已删除所选邮箱地址的全部邮件",
+        "option_deleteFolder": "删除文件夹",
+        "shorten_Title": "缩短",
+        "title_nestFolderUnder": "以下文件夹中的嵌套文件夹",
+        "delivery_status_desc_failed": "无法将邮件投递给某些收件人。邮件投递失败或退信有几种原因。",
+        "spam_alert_external_title": "请务必小心：",
+        "delivery_status_title_quarantined": "已隔离",
+        "option_replyAll": "回复全部",
+        "generatingSummary_Title": "正在生成摘要…",
+        "option_delivery_status": "投递状态",
+        "delegated_write_send_as": "发送为",
+        "toast_failedToLoad": "无法加载",
+        "new_sender_detected_warn_title": "检测到陌生发件人！",
+        "title_snoozeUntil": "延迟直至",
+        "delivery_status_desc_recalled": "成功召回所有邮件",
+        "title_bcc": "密件抄送",
+        "alert_deleteTitle": "是否删除“%@”？",
+        "title_to": "至",
+        "title_from": "从",
+        "option_createSubFolder": "创建子文件夹",
+        "title_savedSearches": "已保存搜索",
+        "option_stopSchedule": "停止安排",
+        "toast_unarchived": "已解档",
+        "option_moveTo": "移至",
+        "title_archived": "已归档",
+        "alert_dialog_block_user_positive_button_text": "无条件阻止",
+        "toast_unableToCreateTag": "无法创建标签",
+        "alert_emptyFolder": "所有电子邮件将移至回收站。",
+        "option_unsnooze": "取消延迟",
+        "delivery_status_desc_non_org_failure": "召回失败：外部邮件（非机构内的邮件）无法召回。",
+        "alert_dialog_block_sender_title": "阻止此发送者",
+        "option_notSpam": "非垃圾邮件",
+        "alert_stopSchedule": "已取消该定时邮件，并移至草稿箱。",
+        "alert_outboxMailDelete": "已安排发送的电子邮件将被永久删除。您可以改为编辑并重新安排发送电子邮件的时间。",
+        "option_emptyFolder": "清空文件夹",
+        "title_replyTo": "回复",
+        "title_pinned_emails": "置顶邮件",
+        "alert_emptySpam": "所有电子邮件将永久删除。",
+        "spam_alert_macro_presents_message": "来自 %@ 的邮件中的附件是一个可执行文件。因此，请务必谨慎操作，不要随意下载该邮件中的附件或单击其中的任何链接或共享敏感数据给发件人。",
+        "toast_searchNameExists": "已保存的搜索名称已存在",
+        "title_templates": "模板",
+        "alert_dialog_unblock_user_title": "取消阻止此用户",
+        "title_allArchived": "所有已归档",
+        "option_print": "打印",
+        "option_emptyAny": "清空%@",
+        "title_filter": "过滤",
+        "title_security": "安全",
+        "alert_exceededFolderPathLength": "文件夹路径过长。请尝试使用更少的子文件夹。",
+        "delivery_status_desc_undo_sent": "邮件已被召回，并使用“撤销”选项取消了邮件投递。",
+        "delivery_status_title_in_retry_queue": "在重试队列",
+        "tooltip_customizeAppearance": "根据您的喜好自定义电子邮件列表",
+        "title_tagColor": "标签颜色",
+        "tooltip_translateEmails_message": "您可通过菜单中的翻译功能，以偏好语言查看邮件。",
+        "button_editTag": "编辑标签",
+        "toast_unableToDeleteTag": "无法删除标签",
+        "title_tagged": "已标记",
+        "alert_deleteTag": "删除此标签后，该标签也将从“待办事项”和“备注”中移除。",
+        "shared_mailbox_onboarding_message": "作为团队访问、回复邮件并协作。",
+        "title_folder": "文件夹",
+        "title_yesterday": "昨天",
+        "unsubscribeLink_alertMessage": "取消订购后，该发件人的邮件将直接进入垃圾邮件。完成后会跳转到其网站。",
+        "delivery_status_title_undeliverable": "不可达",
+        "option_snooze": "延迟",
+        "title_notCc": "抄送不包含",
+        "option_archive": "归档",
+        "spam_alert_external_message": "这封邮件的发件人%@不是您所在机构的成员。因此，请务必谨慎操作，不要随意下载该邮件中的附件或单击其中的任何链接或共享敏感数据给发件人。",
+        "tooltip_text_bimi_second_line": "<br><br>%@消息识别品牌标识 (BIMI)进行验证",
+        "spam_alert_button_trust_sender": "信任发送者",
+        "delivery_status_desc_recalling": "已经开始召回，并正在进行中。",
+        "menu_thumbnail": "缩略图",
+        "option_more": "更多",
+        "title_sentBy": "发送人：",
+        "button_retry": "重试",
+        "new_sender_detected_warn_msg": "您此前未接收过该发件人的邮件，请谨慎点开链接与附件。",
+        "spam_alert_system_rule_based_message": "该电子邮件与其他垃圾邮件/恶意电子邮件的样式匹配。",
+        "title_attachmentContent": "附件内容",
+        "translate_action": "翻译",
+        "title_high": "高",
+        "alert_dialog_block_sender_message": "%@ 将被添加到您的阻止列表中。今后来自该电子邮件地址的所有邮件都将被退回给发件人。",
+        "alert_dialog_trust_sender_message": "电子邮件%@ 将被添加到您信任的发件人列表中。来自该邮箱地址的所有未来电子邮件都不会经过任何垃圾邮件检查，而直接投递到您的账户。",
+        "menu_summary": "摘要",
+        "title_toRecipientString": "%@ 及另外 1 个",
+        "title_folders": "文件夹",
+        "spam_alert_report_not_spam_button": "报告不是垃圾邮件",
+        "alert_invalidTagNameTitle": "标签名称无效",
+        "length_Title": "篇幅",
+        "title_noSubject": "无主题",
+        "request_cancelled_error_message": "请求已取消。请重试。",
+        "button_showOriginal": "显示原文",
+        "delivery_status_desc_recalled_for_org": "已成功为机构内的所有用户召回电子邮件。 ",
+        "delivery_status_title_delivered": "已投递",
+        "title_inFolder": "在文件夹中",
+        "title_notTo": "收件人不包含",
+        "toast_scrubArchiving": "正在准备批量归档邮件",
+        "toast_scrubDeleteScheduleFailed": "无法删除所选邮箱地址的全部邮件",
+        "title_all": "全部",
+        "alert_frwdAsAttachExceeded": "您只能转发 100 条消息。请取消选择一些内容并重试。",
+        "option_markFolderRead": "将文件夹标为已读",
+        "option_scrubMail": "清理邮件？",
+        "toast_selectionExceed": "一次最多仅可选择300封邮件",
+        "unblock_sender_alert_dialog_message": "%@将从您的阻止列表中被删除，今后来自该邮箱地址的所有电子邮件都将显示在您的收件箱中。",
+        "translate_bannerBackToOriginal": "查看原文",
+        "unable_to_generate_summary": "无法生成摘要",
+        "alert_scrubMaxSelection": "您最多只能选择 5 个电子邮件地址",
+        "title_attachment_doesnot_contains": "附件内容不包含",
+        "translate_errorUnableToLoadLanguagesMessage": "加载语言时发生未知错误。请稍后再试。",
+        "title_attachmentType": "附件类型",
+        "unsubscribe_title": "取消订购",
+        "title_chooseSize": "选择大小",
+        "button_loadExternalImages": "加载外部图片",
+        "spam_alert_external_non_contact_message": "这封邮件的发件人%@既不在您的联系人列表中也不是您所在机构的成员。因此，请务必谨慎操作，不要随意下载该邮件中的附件或单击其中的任何链接或共享敏感数据给发件人。",
+        "alert_scrubPickerTitle": "批量归档或删除",
+        "insert_Title": "插入",
+        "tooltip_pinEmails_message": "将重要邮件保留在收件箱顶部，方便快速访问。",
+        "unsubscribeFromSender_alertTitle": "取消订购发件人",
+        "button_selectAll": "全选",
+        "manageEmailsFromSender_alertMessage": "此发件人的电子邮件可能为垃圾邮件且存在安全风险。取消订购可能使发件人追踪到您的电子邮件地址。您可以选择：",
+        "title_forwarded": "转发",
+        "alert_readReceipt": "发件人已为此电子邮件请求已读回执。",
+        "delivery_status_desc_rejected_by_admin": "根据机构的电子邮件策略，管理员从隔离区拒绝了您的电子邮件。",
+        "toast_folderEmptied": "文件夹已清空",
+        "title_noSaved": "没有保存 %@",
+        "regenerate_Title": "重新生成",
+        "title_contains": "包含",
+        "title_sent": "已发送",
+        "option_sendNow": "立即发送",
+        "option_delete": "删除",
+        "alert_deleteFolder": "此文件夹中的所有子文件夹连同电子邮件将被移至回收站。",
+        "request_cancelled_error_title": "请求已取消",
+        "button_send": "发送",
+        "delivery_status_desc_quarantined": "根据机构的电子邮件策略，您的电子邮件已被隔离。",
+        "goToWebsite_button": "前往网站",
+        "emailSummary_Title": "电子邮件摘要",
+        "spam_alert_unauthenticated_mail_title": "警告：无法验证发件人",
+        "title_sharedWithMe": "共享给我",
+        "toast_updateAtendeeStatusFail": "无法更新 RSVP",
+        "spam_action_menu_unblock_user": "取消阻止用户",
+        "button_hideOriginal": "隐藏原文",
+        "report_spam": "报告垃圾邮件",
+        "spam_alert_unauthenticated_mail_message": "我们无法验证该邮件的原始发件人是否为%@。因此，请务必谨慎操作，不要随意下载该邮件中的附件或单击其中的任何链接或共享敏感数据给发件人。",
+        "trust_toast_message": "已添加至信任列表",
+        "translate_bannerTranslating": "正在翻译...",
+        "block_toast_message": "已添加至拦截列表",
+        "toast_folderEdited": "文件夹已编辑",
+        "unauthenticatedDomain_message": "该邮件使用未经验证的域名发送，可能存在伪造。",
+        "alert_scrub": "%@ 文件夹中来自 %@ 的电子邮件可批量归档或删除。",
+        "shared_mailbox_onboarding_title": "随时随地管理共享邮箱！",
+        "title_withReminder": "包含提醒",
+        "toast_securePassRevoked": "已撤销访问权限",
+        "title_withAttachment": "包含附件",
+        "title_followUp": "跟进",
+        "toast_folderDeleted": "文件夹已删除",
+        "title_noRecipients": "无收件人",
+        "placeholder_searchName": "搜索名称",
+        "toast_markedAsRead": "已标记为已读",
+        "title_today": "今天",
+        "title_noEmails": "没有 %@ 电子邮件",
+        "option_forward": "转发",
+        "title_flag": "标记",
+        "summarizing_error_occurred_subtext": "总结电子邮件时发生未知错误。请稍后重试。",
+        "button_addFolder": "添加文件夹",
+        "menu_groupByDate": "按日期分组",
+        "option_reply": "回复",
+        "alert_scrubMinSelection": "请选择至少一个电子邮件地址",
+        "spam_alert_password_protected_attachment_message": "无法扫描受密码保护的文件以查找病毒或恶意文件。因此，请务必谨慎操作，不要随意打开此电子邮件中的附件。只有当您信任该发件人并相信该邮件是真实的时，才能下载并打开它。",
+        "delegated_write_send_on_behalf": "代发邮件",
+        "option_flagAs": "标记为",
+        "unsubscribed_title": "已取消订购",
+        "delivery_status_desc_in_retry_queue": "暂时无法将邮件投递给收件人。队列内的邮件将会自动重试。",
+        "title_streams": "消息流",
+        "tooltip_summarise_message": "快速获取长邮件的摘要，查看关键要点。",
+        "translate_copiedToClipboardToastMessage": "已复制到剪贴板",
+        "option_markAsUnread": "标记为未读",
+        "title_noSelectedContent": "选择 %@ 以在此查看其内容",
+        "title_inSharedFolder": "在共享文件夹中",
+        "title_views": "查看",
+        "placeholder_folderName": "文件夹名",
+        "stopGenerating_button": "停止生成",
+        "title_lastSevenDays": "最近七天",
+        "button_readMore": "展开更多",
+        "button_plusMore": "+%d 个",
+        "toast_searchSaved": "搜索已保存",
+        "friendly_Title": "友善",
+        "persuasive_Title": "具有说服力",
+        "delivery_status_title_in_queue": "排队中",
+        "translate_errorUnableToLoadLanguagesTitle": "无法加载语言",
+        "alert_accountDoesNotExistMessage": "账户在Zoho Mail应用中不存在。",
+        "manageEmailsFromSender_alertTitle": "管理此发送人的电子邮件",
+        "toast_deleted": "已删除",
+        "prompt_placeholder": "开始输入您的提示词…",
+        "menu_selectMails": "选择邮件",
+        "moveFutureEmailsToSpam_button": "将未来的电子邮件移至垃圾邮件文件夹",
+        "option_customizeToolbar": "自定义工具栏",
+        "option_scrub": "清理",
+        "option_tagAs": "标记为",
+        "delivery_status_title_rejected_by_admin": "被管理员拒绝",
+        "title_recall_emails": "撤回电子邮件",
+        "spam_alert_web_pixel_alert_message": "这封来自 %@ 的电子邮件含有用于跟踪的嵌入式Web像素。",
+        "delivery_status_title_recall_failed": "召回失败",
+        "title_alert": "警报",
+        "generateContent_Title": "生成内容",
+        "option_unarchive": "取消归档",
+        "title_tagName": "标签名",
+        "title_important": "重要",
+        "option_forwardAsAttachment": "作为附件转发",
+        "delivery_status_title_partially_recalled": "部分撤回成功",
+        "delivery_status_title_successfully_recalled": "撤回成功",
+        "title_drafts": "草稿",
+        "desc_recall_emails": "召回组织内部已发送的电子邮件，以便在需要时进行审核并重新发送。",
+        "option_deleteSearch": "删除已保存的搜索",
+        "option_markAsNotSpam": "标记为非垃圾邮件",
+        "title_doesnot_contains": "电子邮件内容不包含",
+        "title_hasInlineAttachment": "有嵌入附件",
+        "title_recent": "最近",
+        "title_subject": "主题",
+        "translate_chooseLanguageTitle": "选择语言",
+        "title_noEmailsWithAttachment": "没有带附件的电子邮件",
+        "policy_disabled": "策略已禁用",
+        "title_medium": "中等",
+        "delivery_status_title_email_recalled": "邮件已被召回",
+        "title_notToCc": "收件人/抄送不包含",
+        "alert_folderNameUnavailable": "文件夹名不可用",
+        "button_recall": "撤回",
+        "generate_button": "生成",
+        "unsubscribeMailto_alertMessage": "取消订购后，该发件人的邮件将直接进入垃圾邮件。",
+        "title_attachment_name_doesnot_contains": "附件名称不包含",
+        "option_markAsSpam": "标记为垃圾邮件",
+        "spam_alert_macro_presents_title": "警告：可执行的附件",
+        "alert_stopSchedules": "已取消所有定时邮件，并移至草稿箱。",
+        "alert_emptyTrash": "此文件夹中的所有子文件夹连同电子邮件将永久删除。",
+        "spam_alert_password_protected_attachment_title": "密码保护的附件",
+        "option_edit": "编辑",
+        "title_date": "日期"
+      },
+      "bundle": {
+        "identifier": null,
+        "executable": null,
+        "name": null,
+        "version": null,
+        "short_version": null
+      },
+      "source_path": "/var/folders/fn/g9dndcfj751bh8w7rprn8lx40000gn/T/rea-extracted-888dd316-bdc4-4129-b674-8f626614b3cc/Payload/Zoho Mail.app/ZMMailStrings.bundle/zh-Hans.lproj/Localizable.strings",
+      "provenance": [
+        {
+          "tool": "file",
+          "command": [
+            "/usr/bin/file",
+            "-b",
+            "$PLIST"
+          ],
+          "tool_version": null,
+          "version_reason": "Tool exposes no uniform stable version flag; executable SHA-256 is a prelaunch file sample and does not prove atomic OS image binding.",
+          "executable_sha256": "8014815e1028410f48966f1880f99c842a5678cf2fcaa010e8d7e9e498f651d0",
+          "exit": {
+            "code": 0,
+            "signal": null
+          },
+          "stdout_bytes": 27,
+          "stderr_bytes": 0
+        },
+        {
+          "tool": "plutil",
+          "command": [
+            "/usr/bin/plutil",
+            "-convert",
+            "json",
+            "-o",
+            "-",
+            "--",
+            "$PLIST"
+          ],
+          "tool_version": null,
+          "version_reason": "Tool exposes no uniform stable version flag; executable SHA-256 is a prelaunch file sample and does not prove atomic OS image binding.",
+          "executable_sha256": "5ec63ed0506b7676b30fe69d00ae48c689daf1badc1e786a18166b01b615e8ac",
+          "exit": {
+            "code": 0,
+            "signal": null
+          },
+          "stdout_bytes": 20103,
+          "stderr_bytes": 0
+        }
+      ],
+      "limitations": []
+    },
+    "confidence": "observed",
+    "authority": "shipped-artifact",
+    "environment": null,
+    "limitations": [],
+    "relationship_coverage": null,
+    "locations": [
+      {
+        "kind": "artifact-path",
+        "path": "/var/folders/fn/g9dndcfj751bh8w7rprn8lx40000gn/T/rea-extracted-888dd316-bdc4-4129-b674-8f626614b3cc/Payload/Zoho Mail.app/ZMMailStrings.bundle/zh-Hans.lproj/Localizable.strings"
+      }
+    ],
+    "evidence_links": []
+  },
+  {
+    "evidence_id": "ev_23969c1d9dde3abf559a65f1e7d1b1716ca8f7cc7e26ed6e6a9db4c214c2d21f",
+    "subject": {
+      "name": "Zoho Mail",
+      "digest": {
+        "sha256": "f00473aaac88fe8ccda0238df5afad202424e9497861e6da9e8c059216d0e817"
+      },
+      "local_path": "/private/var/folders/fn/g9dndcfj751bh8w7rprn8lx40000gn/T/rea-extracted-888dd316-bdc4-4129-b674-8f626614b3cc/Payload/Zoho Mail.app/Zoho Mail",
+      "format": "mach-o",
+      "architecture": "arm64"
+    },
+    "provider": {
+      "id": "rea-analysis-view",
+      "name": "REA analysis view projection",
+      "version": "1"
+    },
+    "analysis_profile": null,
+    "predicate_type": "rea.analysis-view",
+    "operation": "inspect_analysis_view",
+    "parameters": {
+      "parent_evidence_id": "ev_621dbe9dadaac3591334fb63ab36bdac5b851c727eaf7f74ce990aa4d693b366",
+      "view": {
+        "kind": "macho",
+        "facet": "load_commands",
+        "offset": 0,
+        "limit": 115
+      }
+    },
+    "raw_result": null,
+    "normalized_result": {
+      "kind": "macho",
+      "view": {
+        "kind": "macho",
+        "facet": "load_commands",
+        "offset": 0,
+        "limit": 115
+      },
+      "item": [
+        {
+          "index": 10,
+          "kind": "LC_UUID",
+          "fields": {
+            "cmd": "LC_UUID",
+            "cmdsize": 24,
+            "uuid": "E2C3E884-72D9-3FFE-9B0B-882B3B036014"
+          }
+        },
+        {
+          "index": 11,
+          "kind": "LC_BUILD_VERSION",
+          "fields": {
+            "cmd": "LC_BUILD_VERSION",
+            "cmdsize": 32,
+            "platform": 2,
+            "minos": "16.0",
+            "sdk": "26.1",
+            "ntools": 1,
+            "tool": 3,
+            "version": "1230.1"
+          }
+        },
+        {
+          "index": 14,
+          "kind": "LC_ENCRYPTION_INFO_64",
+          "fields": {
+            "cmd": "LC_ENCRYPTION_INFO_64",
+            "cmdsize": 24,
+            "cryptoff": 16384,
+            "cryptsize": 38535168,
+            "cryptid": 1,
+            "pad": 0
+          }
+        }
+      ],
+      "parent_evidence_id": "ev_621dbe9dadaac3591334fb63ab36bdac5b851c727eaf7f74ce990aa4d693b366",
+      "parent_operation": "inspect_macho",
+      "parent_digest": "621dbe9dadaac3591334fb63ab36bdac5b851c727eaf7f74ce990aa4d693b366",
+      "view_digest": "e3f1b30fa714b2dad87691a31b886af56b8fce71a10a3901bdd7063689b7a127",
+      "artifact": {
+        "path": "/private/var/folders/fn/g9dndcfj751bh8w7rprn8lx40000gn/T/rea-extracted-888dd316-bdc4-4129-b674-8f626614b3cc/Payload/Zoho Mail.app/Zoho Mail",
+        "sha256": "f00473aaac88fe8ccda0238df5afad202424e9497861e6da9e8c059216d0e817"
+      },
+      "coverage": {
+        "status": "page",
+        "examined": 115,
+        "total": 115,
+        "next_offset": null,
+        "exhausted": true
+      },
+      "limitations": [
+        "Imports and exports combine dyld_info and nm; stripped or toolchain-hidden symbols may be absent.",
+        "vtool output is retained as provenance but only otool build metadata is normalized."
+      ],
+      "unknowns": [
+        "Native tools did not report exhaustive imports, exports; page exhaustion does not establish absence of unreturned rows."
+      ],
+      "source_total": 115,
+      "source_exhaustive": true
+    },
+    "confidence": "derived",
+    "authority": "shipped-artifact",
+    "environment": null,
+    "limitations": [
+      "Imports and exports combine dyld_info and nm; stripped or toolchain-hidden symbols may be absent.",
+      "vtool output is retained as provenance but only otool build metadata is normalized."
+    ],
+    "relationship_coverage": null,
+    "locations": [
+      {
+        "kind": "artifact-path",
+        "path": "/private/var/folders/fn/g9dndcfj751bh8w7rprn8lx40000gn/T/rea-extracted-888dd316-bdc4-4129-b674-8f626614b3cc/Payload/Zoho Mail.app/Zoho Mail"
+      }
+    ],
+    "evidence_links": [
+      "ev_621dbe9dadaac3591334fb63ab36bdac5b851c727eaf7f74ce990aa4d693b366"
+    ],
+    "note": "Saved selection of returned load-command rows; original full evidence retained by REA."
+  }
+]

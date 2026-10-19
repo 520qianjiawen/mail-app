@@ -1,0 +1,375 @@
+[
+  {
+    "node_id": "jag_node_94906d20217c8e91608af8b1905188fc56e5eb90661645802fbdd137e91888c3",
+    "kind": "javascript-module",
+    "observations": [
+      {
+        "evidence": {
+          "artifact": {
+            "artifact_id": "art_30459660967c5957b6f193686abe87c6384ae92b4633a88a607110239ad4364f",
+            "available": true,
+            "sha256": "30459660967c5957b6f193686abe87c6384ae92b4633a88a607110239ad4364f"
+          },
+          "authority": "ast-static-analysis",
+          "confidence": "exact",
+          "coverage": {
+            "limits": [],
+            "omitted_count": 0,
+            "status": "complete",
+            "truncated": false
+          },
+          "evidence_ids": [],
+          "extractor": {
+            "executable_sha256": null,
+            "name": "rea-javascript-artifact-reconstruction",
+            "operation": "recover-source-module",
+            "version": "1"
+          },
+          "limitations": [
+            "Cross-function mutation and dynamic property resolution remain unknown.",
+            "Local call, argument, return, and closure relations are static candidates and do not prove runtime invocation.",
+            "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+            "Return sites include only direct callable returns; nested callable returns remain separate.",
+            "Values and aliases were recovered from inert syntax only; no JavaScript was executed."
+          ],
+          "location": {
+            "available": true,
+            "value": {
+              "end": {
+                "column": 21638,
+                "line": 1
+              },
+              "kind": "source-range",
+              "source": "app/window/app-window/BrowserWindow.main.js",
+              "start": {
+                "column": 0,
+                "line": 1
+              }
+            }
+          },
+          "state": "observed"
+        },
+        "identifier_strategy": {
+          "stability": "observation-exact",
+          "strategy": "semantic-content-sha256"
+        },
+        "label": "app/window/app-window/BrowserWindow.main.js",
+        "observation_id": "jag_observation_b246db684562147d6762bb55ede4a3ce15d5d5e44c93bb0b18e0493d998443b7",
+        "properties": {
+          "container_sha256": "6d284ef0f391b2b880c5c3def78ffbfecd5ed8ce495d4f5460c579c1b3ea6a3a",
+          "export_names": [
+            "default"
+          ],
+          "export_relationships": 1,
+          "import_relationships": 44,
+          "logical_module_key": "app/window/app-window/BrowserWindow.main.js",
+          "module_format": "commonjs",
+          "omitted_export_names": 0,
+          "path": "app/window/app-window/BrowserWindow.main.js",
+          "semantic_role": "source-module",
+          "type_export_names": [],
+          "type_relationships": 0
+        },
+        "source_map_reference": null
+      }
+    ]
+  },
+  {
+    "node_id": "jag_node_aab8f3007c6d2c4486b5cdbb83ad30d0bf52fd798a0e261bfdddf7a3a0b34057",
+    "kind": "javascript-module",
+    "observations": [
+      {
+        "evidence": {
+          "artifact": {
+            "artifact_id": "art_c6d0e43de10fb17aa5e35a27f0fc34d4cab875203c4d2f49316186dd0d3d3571",
+            "available": true,
+            "sha256": "c6d0e43de10fb17aa5e35a27f0fc34d4cab875203c4d2f49316186dd0d3d3571"
+          },
+          "authority": "ast-static-analysis",
+          "confidence": "exact",
+          "coverage": {
+            "limits": [],
+            "omitted_count": 0,
+            "status": "complete",
+            "truncated": false
+          },
+          "evidence_ids": [],
+          "extractor": {
+            "executable_sha256": null,
+            "name": "rea-javascript-artifact-reconstruction",
+            "operation": "recover-source-module",
+            "version": "1"
+          },
+          "limitations": [
+            "Cross-function mutation and dynamic property resolution remain unknown.",
+            "Local call, argument, return, and closure relations are static candidates and do not prove runtime invocation.",
+            "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+            "Return sites include only direct callable returns; nested callable returns remain separate.",
+            "Values and aliases were recovered from inert syntax only; no JavaScript was executed."
+          ],
+          "location": {
+            "available": true,
+            "value": {
+              "end": {
+                "column": 6753,
+                "line": 1
+              },
+              "kind": "source-range",
+              "source": "app/features/deviceTrust/NamedPipeTokenRefresher.js",
+              "start": {
+                "column": 0,
+                "line": 1
+              }
+            }
+          },
+          "state": "observed"
+        },
+        "identifier_strategy": {
+          "stability": "observation-exact",
+          "strategy": "semantic-content-sha256"
+        },
+        "label": "app/features/deviceTrust/NamedPipeTokenRefresher.js",
+        "observation_id": "jag_observation_1f863e53bdd24cacd9bddd8b398f0cf2de53cdfafa84c93f78fb208ccea733bf",
+        "properties": {
+          "container_sha256": "6d284ef0f391b2b880c5c3def78ffbfecd5ed8ce495d4f5460c579c1b3ea6a3a",
+          "export_names": [
+            "default"
+          ],
+          "export_relationships": 1,
+          "import_relationships": 10,
+          "logical_module_key": "app/features/deviceTrust/NamedPipeTokenRefresher.js",
+          "module_format": "commonjs",
+          "omitted_export_names": 0,
+          "path": "app/features/deviceTrust/NamedPipeTokenRefresher.js",
+          "semantic_role": "source-module",
+          "type_export_names": [],
+          "type_relationships": 0
+        },
+        "source_map_reference": null
+      }
+    ]
+  },
+  {
+    "node_id": "jag_node_b8a7ae7d532b64d0630277f36d0e94bb136fade42d4423acb50b44b576a8fce5",
+    "kind": "javascript-module",
+    "observations": [
+      {
+        "evidence": {
+          "artifact": {
+            "artifact_id": "art_b15bc75ec80b8062d20c74e3d51e186719cdae6334971f6c6888de1349a37fb1",
+            "available": true,
+            "sha256": "b15bc75ec80b8062d20c74e3d51e186719cdae6334971f6c6888de1349a37fb1"
+          },
+          "authority": "ast-static-analysis",
+          "confidence": "exact",
+          "coverage": {
+            "limits": [],
+            "omitted_count": 0,
+            "status": "complete",
+            "truncated": false
+          },
+          "evidence_ids": [],
+          "extractor": {
+            "executable_sha256": null,
+            "name": "rea-javascript-artifact-reconstruction",
+            "operation": "recover-source-module",
+            "version": "1"
+          },
+          "limitations": [
+            "Cross-function mutation and dynamic property resolution remain unknown.",
+            "Local call, argument, return, and closure relations are static candidates and do not prove runtime invocation.",
+            "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+            "Return sites include only direct callable returns; nested callable returns remain separate.",
+            "Values and aliases were recovered from inert syntax only; no JavaScript was executed."
+          ],
+          "location": {
+            "available": true,
+            "value": {
+              "end": {
+                "column": 21207,
+                "line": 1
+              },
+              "kind": "source-range",
+              "source": "app/window/app-window/preload.js",
+              "start": {
+                "column": 0,
+                "line": 1
+              }
+            }
+          },
+          "state": "observed"
+        },
+        "identifier_strategy": {
+          "stability": "observation-exact",
+          "strategy": "semantic-content-sha256"
+        },
+        "label": "app/window/app-window/preload.js",
+        "observation_id": "jag_observation_36a62b3460be20ebb0ea3e53b6ad83db538e03962f306ee00cb4d928356e7fde",
+        "properties": {
+          "container_sha256": "6d284ef0f391b2b880c5c3def78ffbfecd5ed8ce495d4f5460c579c1b3ea6a3a",
+          "export_names": [],
+          "export_relationships": 0,
+          "import_relationships": 2,
+          "logical_module_key": "app/window/app-window/preload.js",
+          "module_format": "commonjs",
+          "omitted_export_names": 0,
+          "path": "app/window/app-window/preload.js",
+          "semantic_role": "source-module",
+          "type_export_names": [],
+          "type_relationships": 0
+        },
+        "source_map_reference": null
+      }
+    ]
+  },
+  {
+    "node_id": "jag_node_cbec178cfabbb502bf1016bffac8f84a3877f8fdfc55ee47f7ae550b1485db29",
+    "kind": "javascript-module",
+    "observations": [
+      {
+        "evidence": {
+          "artifact": {
+            "artifact_id": "art_cc589ad3b96ba265d971e151fad4169881f43306b7b80fdf72cba273f6465df5",
+            "available": true,
+            "sha256": "cc589ad3b96ba265d971e151fad4169881f43306b7b80fdf72cba273f6465df5"
+          },
+          "authority": "ast-static-analysis",
+          "confidence": "exact",
+          "coverage": {
+            "limits": [],
+            "omitted_count": 0,
+            "status": "complete",
+            "truncated": false
+          },
+          "evidence_ids": [],
+          "extractor": {
+            "executable_sha256": null,
+            "name": "rea-javascript-artifact-reconstruction",
+            "operation": "recover-source-module",
+            "version": "1"
+          },
+          "limitations": [
+            "Cross-function mutation and dynamic property resolution remain unknown.",
+            "Local call, argument, return, and closure relations are static candidates and do not prove runtime invocation.",
+            "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+            "Return sites include only direct callable returns; nested callable returns remain separate.",
+            "Values and aliases were recovered from inert syntax only; no JavaScript was executed."
+          ],
+          "location": {
+            "available": true,
+            "value": {
+              "end": {
+                "column": 2219,
+                "line": 1
+              },
+              "kind": "source-range",
+              "source": "app/security/PermissionPolicy.js",
+              "start": {
+                "column": 0,
+                "line": 1
+              }
+            }
+          },
+          "state": "observed"
+        },
+        "identifier_strategy": {
+          "stability": "observation-exact",
+          "strategy": "semantic-content-sha256"
+        },
+        "label": "app/security/PermissionPolicy.js",
+        "observation_id": "jag_observation_41d143afc7128751104175cbf15e243834e1f1ec13109f7f6ef4e03b84c0526e",
+        "properties": {
+          "container_sha256": "6d284ef0f391b2b880c5c3def78ffbfecd5ed8ce495d4f5460c579c1b3ea6a3a",
+          "export_names": [
+            "default"
+          ],
+          "export_relationships": 1,
+          "import_relationships": 3,
+          "logical_module_key": "app/security/PermissionPolicy.js",
+          "module_format": "commonjs",
+          "omitted_export_names": 0,
+          "path": "app/security/PermissionPolicy.js",
+          "semantic_role": "source-module",
+          "type_export_names": [],
+          "type_relationships": 0
+        },
+        "source_map_reference": null
+      }
+    ]
+  },
+  {
+    "node_id": "jag_node_edb463c0e440b096f6a6536826ceea62dc344f79a14247c25ce50030830bf705",
+    "kind": "javascript-module",
+    "observations": [
+      {
+        "evidence": {
+          "artifact": {
+            "artifact_id": "art_36bfc6242fdef6a4f7ffecab862241f976ab3c194b7c0df73e49525238d49e6f",
+            "available": true,
+            "sha256": "36bfc6242fdef6a4f7ffecab862241f976ab3c194b7c0df73e49525238d49e6f"
+          },
+          "authority": "ast-static-analysis",
+          "confidence": "exact",
+          "coverage": {
+            "limits": [],
+            "omitted_count": 0,
+            "status": "complete",
+            "truncated": false
+          },
+          "evidence_ids": [],
+          "extractor": {
+            "executable_sha256": null,
+            "name": "rea-javascript-artifact-reconstruction",
+            "operation": "recover-source-module",
+            "version": "1"
+          },
+          "limitations": [
+            "Cross-function mutation and dynamic property resolution remain unknown.",
+            "Local call, argument, return, and closure relations are static candidates and do not prove runtime invocation.",
+            "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+            "Return sites include only direct callable returns; nested callable returns remain separate.",
+            "Values and aliases were recovered from inert syntax only; no JavaScript was executed."
+          ],
+          "location": {
+            "available": true,
+            "value": {
+              "end": {
+                "column": 3855,
+                "line": 1
+              },
+              "kind": "source-range",
+              "source": "app/sessions/SessionStore.js",
+              "start": {
+                "column": 0,
+                "line": 1
+              }
+            }
+          },
+          "state": "observed"
+        },
+        "identifier_strategy": {
+          "stability": "observation-exact",
+          "strategy": "semantic-content-sha256"
+        },
+        "label": "app/sessions/SessionStore.js",
+        "observation_id": "jag_observation_b0053de0dbd05798d602f0884cbf76f03494b82efd2792f28e663b36c55fcf5a",
+        "properties": {
+          "container_sha256": "6d284ef0f391b2b880c5c3def78ffbfecd5ed8ce495d4f5460c579c1b3ea6a3a",
+          "export_names": [
+            "default"
+          ],
+          "export_relationships": 1,
+          "import_relationships": 4,
+          "logical_module_key": "app/sessions/SessionStore.js",
+          "module_format": "commonjs",
+          "omitted_export_names": 0,
+          "path": "app/sessions/SessionStore.js",
+          "semantic_role": "source-module",
+          "type_export_names": [],
+          "type_relationships": 0
+        },
+        "source_map_reference": null
+      }
+    ]
+  }
+]

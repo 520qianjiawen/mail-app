@@ -1,0 +1,107 @@
+$ pkgutil --check-signature /Users/cavon/Downloads/zoho-mail-desktop-lite-installer-arm64-v1.10.5.pkg
+EXIT 0
+Package "zoho-mail-desktop-lite-installer-arm64-v1.10.5.pkg":
+   Status: signed by a developer certificate issued by Apple for distribution
+   Notarization: trusted by the Apple notary service
+   Signed with a trusted timestamp on: 2026-10-05 14:02:39 +0000
+   Certificate Chain:
+    1. Developer ID Installer: Zoho Corporation (TZ824L8Y37)
+       Expires: 2027-02-01 22:12:15 +0000
+       SHA256 Fingerprint:
+           40 2B 22 52 7D 43 21 CF 6D 97 E9 1E 37 2F 2B A4 A8 CD 50 12 37 0C 
+           44 BF DC 99 E0 3C 87 F4 82 F6
+       ------------------------------------------------------------------------
+    2. Developer ID Certification Authority
+       Expires: 2027-02-01 22:12:15 +0000
+       SHA256 Fingerprint:
+           7A FC 9D 01 A6 2F 03 A2 DE 96 37 93 6D 4A FE 68 09 0D 2D E1 8D 03 
+           F2 9C 88 CF B0 B1 BA 63 58 7F
+       ------------------------------------------------------------------------
+    3. Apple Root CA
+       Expires: 2035-02-09 21:40:36 +0000
+       SHA256 Fingerprint:
+           B0 B1 73 0E CB C7 FF 45 05 14 2C 49 F1 29 5E 6E DA 6B CA ED 7E 2C 
+           68 C5 BE 91 B5 A1 10 01 F0 24
+
+
+
+$ codesign --verify --deep --strict --verbose=2 /Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app
+EXIT 0
+--prepared:/Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app/Contents/Frameworks/Zoho Mail - Desktop Helper (Renderer).app
+--validated:/Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app/Contents/Frameworks/Zoho Mail - Desktop Helper (Renderer).app
+--prepared:/Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app/Contents/Frameworks/Squirrel.framework/Versions/Current/.
+--validated:/Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app/Contents/Frameworks/Squirrel.framework/Versions/Current/.
+--prepared:/Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app/Contents/Frameworks/ReactiveObjC.framework/Versions/Current/.
+--validated:/Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app/Contents/Frameworks/ReactiveObjC.framework/Versions/Current/.
+--prepared:/Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app/Contents/Frameworks/Zoho Mail - Desktop Helper.app
+--prepared:/Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app/Contents/Frameworks/Zoho Mail - Desktop Helper (Plugin).app
+--validated:/Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app/Contents/Frameworks/Zoho Mail - Desktop Helper.app
+--validated:/Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app/Contents/Frameworks/Zoho Mail - Desktop Helper (Plugin).app
+--prepared:/Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app/Contents/Frameworks/Zoho Mail - Desktop Helper (GPU).app
+--prepared:/Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app/Contents/Frameworks/Mantle.framework/Versions/Current/.
+--validated:/Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app/Contents/Frameworks/Zoho Mail - Desktop Helper (GPU).app
+--validated:/Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app/Contents/Frameworks/Mantle.framework/Versions/Current/.
+--prepared:/Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app/Contents/Frameworks/Electron Framework.framework/Versions/Current/.
+--prepared:/Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app/Contents/Frameworks/Electron Framework.framework/Versions/Current/Helpers/chrome_crashpad_handler
+--validated:/Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app/Contents/Frameworks/Electron Framework.framework/Versions/Current/Helpers/chrome_crashpad_handler
+--validated:/Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app/Contents/Frameworks/Electron Framework.framework/Versions/Current/.
+/Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app: valid on disk
+/Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app: satisfies its Designated Requirement
+
+
+$ codesign -dv --verbose=4 /Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app
+EXIT 0
+Executable=/Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app/Contents/MacOS/Zoho Mail - Desktop
+Identifier=com.zoho.mail.desktop
+Format=app bundle with Mach-O thin (arm64)
+CodeDirectory v=20500 size=641 flags=0x10000(runtime) hashes=9+7 location=embedded
+VersionPlatform=1
+VersionMin=786432
+VersionSDK=1703936
+Hash type=sha256 size=32
+CandidateCDHash sha256=8ebeb36d161460c091d9faabd9001a23da52eb8a
+CandidateCDHashFull sha256=8ebeb36d161460c091d9faabd9001a23da52eb8ac3bdb379651365c957cd1abb
+Hash choices=sha256
+CMSDigest=8ebeb36d161460c091d9faabd9001a23da52eb8ac3bdb379651365c957cd1abb
+CMSDigestType=2
+Executable Segment base=0
+Executable Segment limit=16384
+Executable Segment flags=0x1
+Page size=4096
+CDHash=8ebeb36d161460c091d9faabd9001a23da52eb8a
+Signature size=8982
+Authority=Developer ID Application: Zoho Corporation (TZ824L8Y37)
+Authority=Developer ID Certification Authority
+Authority=Apple Root CA
+Timestamp=Oct 5, 2026 at 10:02:24 AM
+Info.plist entries=40
+TeamIdentifier=TZ824L8Y37
+Runtime Version=26.0.0
+Sealed Resources version=2 rules=13 files=43
+Internal requirements count=1 size=184
+Total signatures=1
+Chosen signature=1
+
+
+$ codesign -d --entitlements - /Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app
+EXIT 0
+[Dict]
+	[Key] com.apple.security.cs.allow-jit
+	[Value]
+		[Bool] true
+	[Key] com.apple.security.cs.allow-unsigned-executable-memory
+	[Value]
+		[Bool] true
+	[Key] com.apple.security.cs.disable-library-validation
+	[Value]
+		[Bool] true
+	[Key] com.apple.security.device.audio-input
+	[Value]
+		[Bool] true
+	[Key] com.apple.security.device.camera
+	[Value]
+		[Bool] true
+	[Key] com.apple.security.personal-information.location
+	[Value]
+		[Bool] true
+Executable=/Users/cavon/Downloads/Test/mail APP/analysis/pkg-expanded/com.zoho.mail.desktop.pkg/Payload/Zoho Mail - Desktop.app/Contents/MacOS/Zoho Mail - Desktop

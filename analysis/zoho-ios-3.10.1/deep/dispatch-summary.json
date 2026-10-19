@@ -1,0 +1,78 @@
+{
+  "dispatch_evidence_id": "ev_540d4952c4269ac8212ee77905a0e590f336cf06ae2fc43cd19fc4ae22d15a3b",
+  "result_counts": {
+    "objc_categories": 0,
+    "objc_classes": 10,
+    "objc_dispatch_implementations": 0,
+    "objc_ivars": 0,
+    "objc_protocol_records": 0,
+    "objc_protocols": 0,
+    "relative_pointers": 8460,
+    "swift_conformances": 0,
+    "swift_decls": 0,
+    "swift_dispatch_slots": 0,
+    "swift_symbols": 0
+  },
+  "coverage": [
+    {
+      "decoded": 8,
+      "examined": 3002,
+      "facet": "objc_class_method_ivar_metadata",
+      "reason": "Protocol 0x102628210: The encoded data was not valid for encoding utf-8; Protocol 0x102628270: The encoded data was not valid for encoding utf-8; Protocol 0x102629380: The encoded ",
+      "status": "partial"
+    },
+    {
+      "decoded": 90,
+      "examined": 8460,
+      "facet": "binary_relative_pointers",
+      "reason": "max_records_reached; relative_pointer_targets_unresolved",
+      "status": "partial"
+    },
+    {
+      "decoded": 0,
+      "examined": 14,
+      "facet": "objc_properties_categories",
+      "reason": "category_decode_failed at 0x102625058: The encoded data was not valid for encoding utf-8; category_decode_failed at 0x102625060: The encoded data was not valid for encoding utf-8; ",
+      "status": "partial"
+    },
+    {
+      "decoded": 2,
+      "examined": 2,
+      "facet": "pointer_fixups",
+      "reason": "chained fixups: DYLD_CHAINED_PTR_64_OFFSET",
+      "status": "complete"
+    },
+    {
+      "decoded": 0,
+      "examined": 0,
+      "facet": "swift_generic_resilient_witnesses_overrides_async_coroutines",
+      "reason": "This reader admits simple Swift conformance/static witness records and non-generic, non-resilient class vtables; generic/resilient tables and other Swift metadata families are not ",
+      "status": "unsupported"
+    },
+    {
+      "decoded": 0,
+      "examined": 8373,
+      "facet": "swift_conformances_static_witness_slots",
+      "reason": "conformance_decode_failed at 0x1023e8ed8: Unmapped or ambiguous metadata pointer 0x15ab73edf; conformance_decode_failed at 0x1023e8edc: Unmapped or ambiguous metadata pointer 0xee2",
+      "status": "partial"
+    },
+    {
+      "decoded": 0,
+      "examined": 0,
+      "facet": "swift_class_vtable_descriptors",
+      "reason": "record_budget_exhausted at 0x1023f2244: max_records_reached; max_records_reached",
+      "status": "partial"
+    }
+  ],
+  "ib_documents": 63,
+  "ib_nodes": 1869,
+  "ib_edges": 599,
+  "ib_main_root_documents": [
+    "LaunchScreen.storyboardc/01J-lp-oVM-view-Ze5-6b-2t3.nib",
+    "LaunchScreen.storyboardc/UIViewController-01J-lp-oVM.nib"
+  ],
+  "limitations": [
+    "Decoded names are corrupt because their string bytes lie in encrypted ranges; do not treat class rows as recovered application types.",
+    "A record budget was exhausted; no absence claim is made for unreturned metadata."
+  ]
+}

@@ -1,0 +1,127 @@
+{
+  "binary_sha256": "f00473aaac88fe8ccda0238df5afad202424e9497861e6da9e8c059216d0e817",
+  "raw_ascii_fragments": [
+    {
+      "file_offset": "0x28e0294",
+      "ascii_fragment": "8allAccountsUseCase33_0B0186C3BD49E7F43D38DDA0E1F45D77LL16ZMMailBackendKit0c7AllMailG9Interface_pvpfi"
+    },
+    {
+      "file_offset": "0x292c7d3",
+      "ascii_fragment": "18allAccountsService17getInboxesAdapter07unifiedbM0AC0a7BackendC00d3AllfI9Interface_p_05ZMailoM00dL9Adaptable_pAI0efbS0_ptcfC"
+    },
+    {
+      "file_offset": "0x292d3cc",
+      "ascii_fragment": "14GetUnifiedMailB8ProviderV"
+    },
+    {
+      "file_offset": "0x295c4a7",
+      "ascii_fragment": "AllInboxesMailListNavigatable"
+    },
+    {
+      "file_offset": "0x295c8fe",
+      "ascii_fragment": "&7getViewController7account11coordinator16ZMMailActionsKit32FolderUnreadCountEventObservable_So06UIViewE0CXc0h7BackendJ00H7AccountO_AA29AllInboxesMailListNavigatable_AA06CreatekW0AA0x3TagW0AA0kuvW0AA30OtherMainMenuPresenterDelegateAA013SharedMailboxuvW0AA07StreamsvW0AA04TagsuvW0AA0duvW0AF0x4EditydW0AF0k17ContextMenuActionW0ptF"
+    },
+    {
+      "file_offset": "0x295e93b",
+      "ascii_fragment": "&7account18allAccountsUseCase06secureF14BackendAdapterAC0aoC00A7AccountO_AG010GetAllMailK9Interface_p05ZMailoP00degF9Adaptable_ptcf"
+    },
+    {
+      "file_offset": "0x2994a9f",
+      "ascii_fragment": "0isAllInboxSbyF"
+    },
+    {
+      "file_offset": "0x29ca4b1",
+      "ascii_fragment": "AgetUnifiedMailList33_0CF036972BB36BDCF47C29AB8CD6DC61LL0A00a3GetghI0CSgvpfi"
+    },
+    {
+      "file_offset": "0x2a3c1ed",
+      "ascii_fragment": "^UnifiedMails5users6filter9startTime4from15isConvSupported5limit11requestType8callbackySayAA04ZGeteF10FolderInfoVG_AA0A10ListFilterOSdSgSiSgSbSi12VTComponents08ZRequestQ0OySayAA0A7SummaryCGSg_AvT6ZErrorCSgtctF"
+    },
+    {
+      "file_offset": "0x2a42f54",
+      "ascii_fragment": "_UnifiedMailsbC8ContractAA"
+    },
+    {
+      "file_offset": "0x2a63120",
+      "ascii_fragment": "0getUnifiedA5Lists23isConversationSupported5zuids6accIds06folderL08flagType9startTime5limitSayAA0A7SummaryCGSgSb_SaySSGA2PSSSdSgSiSgtF"
+    },
+    {
+      "file_offset": "0x2a65ff7",
+      "ascii_fragment": "h9getUnifiedListsWithAttachment23isConversationSupported5zuids6accIds06folderN09startTime5limitSayAA0A7SummaryCGSgSb_SaySSGA2OSdSgSiSgtF"
+    },
+    {
+      "file_offset": "0x2a82a2f",
+      "ascii_fragment": "oUnifiedMailListC"
+    },
+    {
+      "file_offset": "0x2ab6903",
+      "ascii_fragment": "|UnifiedMailListRequestC"
+    },
+    {
+      "file_offset": "0x2abc393",
+      "ascii_fragment": "~UnifiedMailListResponseC"
+    },
+    {
+      "file_offset": "0x2acabd4",
+      "ascii_fragment": "UnifiedMailsDataManagerContract"
+    },
+    {
+      "file_offset": "0x2ae9355",
+      "ascii_fragment": "6ZGetUnifiedMailsFolderInfoV"
+    },
+    {
+      "file_offset": "0x2b6f108",
+      "ascii_fragment": "UnifiedMailList"
+    }
+  ],
+  "localization_resources": [
+    {
+      "path": "ZMLoginStrings.bundle/en.lproj/Localizable.strings",
+      "sha256": "78d8aec73f5fe848fab4136059403556886542039f9449eb1792f2e03d667039",
+      "entries": {
+        "onBoardingUnifiedInbox_label": "Multiple Zoho Mail accounts in a unified inbox"
+      }
+    },
+    {
+      "path": "ZMLoginStrings.bundle/zh-Hans.lproj/Localizable.strings",
+      "sha256": "64e9a166a73afe0efb04a3832abdee081db895f71670797258cc72f3cfa9ea07",
+      "entries": {
+        "onBoardingUnifiedInbox_label": "一个收件箱统一管理所有Zoho邮箱"
+      }
+    },
+    {
+      "path": "ZMMailStrings.bundle/en.lproj/Localizable.strings",
+      "sha256": "b8e61bbf0b0dbe19631ee1b428222750bfc3ed7df43bd65bb1cae927ce56074a",
+      "entries": {
+        "title_allInboxes": "All Inboxes",
+        "title_unifiedInbox": "Unified Inbox"
+      }
+    },
+    {
+      "path": "ZMMailStrings.bundle/zh-Hans.lproj/Localizable.strings",
+      "sha256": "c5a9d50284026fd1a97ce1e98e1b47ca9385c762b5fe782f09024a440bfc9fb2",
+      "entries": {
+        "title_allInboxes": "所有收件箱",
+        "title_unifiedInbox": "统一收件箱"
+      }
+    },
+    {
+      "path": "ZMSettingsStrings.bundle/en.lproj/Localizable.strings",
+      "sha256": "aa9e3684cfa6eb785514abc4b757ce0c17e5adef9cf695c533da161c7ea6223e",
+      "entries": {
+        "all_inboxes_title": "All Inboxes"
+      }
+    },
+    {
+      "path": "ZMSettingsStrings.bundle/zh-Hans.lproj/Localizable.strings",
+      "sha256": "f74f0dcc8082e310191684b8d59750d461574ee0ca00ca0587ef6cff243125f2",
+      "entries": {
+        "all_inboxes_title": "所有收件箱"
+      }
+    }
+  ],
+  "limitations": [
+    "Main executable LC_ENCRYPTION_INFO_64 cryptid=1. No encrypted instructions were decompiled.",
+    "ASCII fragments do not establish complete symbol names, call relationships, API routes, or runtime behavior."
+  ]
+}

@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.DS_Store
+**/.DS_Store
+test-results/
+
+# Binaries & packages
+*.ipa
+*.dmg
+*.pkg
+
+# Large extracted/bundle REA artifacts (>100MB blocked by GitHub)
+analysis/pkg-expanded/
+analysis/rea-evidence-bundle.json
+analysis/asar-extracted/

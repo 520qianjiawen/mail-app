@@ -1,0 +1,21 @@
+{
+  "file_offset": 42742432,
+  "size": 2814944,
+  "nodes_visited": 2,
+  "terminals": [
+    [
+      27,
+      "__mh_execute_header",
+      "0000"
+    ]
+  ],
+  "leaves": [
+    [
+      27,
+      "__mh_execute_header",
+      2
+    ]
+  ],
+  "issues": [],
+  "limitation": "Custom supplementary byte parser, not a REA function/call recovery."
+}

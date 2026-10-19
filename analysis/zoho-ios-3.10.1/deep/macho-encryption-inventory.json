@@ -1,0 +1,189 @@
+[
+  {
+    "path": "Zoho Mail",
+    "size": 47290320,
+    "encryption_commands": [
+      {
+        "offset": 16384,
+        "length": 38535168,
+        "cryptid": 1
+      }
+    ]
+  },
+  {
+    "path": "PlugIns/ZohoMailWidgetsExtension.appex/ZohoMailWidgetsExtension",
+    "size": 28917520,
+    "encryption_commands": [
+      {
+        "offset": 16384,
+        "length": 23363584,
+        "cryptid": 1
+      }
+    ]
+  },
+  {
+    "path": "PlugIns/NotificationServiceExtension.appex/NotificationServiceExtension",
+    "size": 1521888,
+    "encryption_commands": [
+      {
+        "offset": 16384,
+        "length": 1114112,
+        "cryptid": 1
+      }
+    ]
+  },
+  {
+    "path": "PlugIns/ShareExtension.appex/ShareExtension",
+    "size": 30282544,
+    "encryption_commands": [
+      {
+        "offset": 16384,
+        "length": 24461312,
+        "cryptid": 1
+      }
+    ]
+  },
+  {
+    "path": "Frameworks/ZohoDeskPortalAPIKit.framework/ZohoDeskPortalAPIKit",
+    "size": 1933536,
+    "encryption_commands": [
+      {
+        "offset": 32768,
+        "length": 1146880,
+        "cryptid": 1
+      }
+    ]
+  },
+  {
+    "path": "Frameworks/ZohoDeskPortalKB.framework/ZohoDeskPortalKB",
+    "size": 671152,
+    "encryption_commands": [
+      {
+        "offset": 16384,
+        "length": 393216,
+        "cryptid": 1
+      }
+    ]
+  },
+  {
+    "path": "Frameworks/Apptics.framework/Apptics",
+    "size": 1082112,
+    "encryption_commands": [
+      {
+        "offset": 32768,
+        "length": 753664,
+        "cryptid": 1
+      }
+    ]
+  },
+  {
+    "path": "Frameworks/ZDHelperKit.framework/ZDHelperKit",
+    "size": 535104,
+    "encryption_commands": [
+      {
+        "offset": 32768,
+        "length": 278528,
+        "cryptid": 1
+      }
+    ]
+  },
+  {
+    "path": "Frameworks/AppticsEventTracker.framework/AppticsEventTracker",
+    "size": 113712,
+    "encryption_commands": [
+      {
+        "offset": 16384,
+        "length": 49152,
+        "cryptid": 1
+      }
+    ]
+  },
+  {
+    "path": "Frameworks/AppticsScreenTracker.framework/AppticsScreenTracker",
+    "size": 73056,
+    "encryption_commands": [
+      {
+        "offset": 16384,
+        "length": 16384,
+        "cryptid": 1
+      }
+    ]
+  },
+  {
+    "path": "Frameworks/ZohoDeskPlatformUIKit.framework/ZohoDeskPlatformUIKit",
+    "size": 6073472,
+    "encryption_commands": [
+      {
+        "offset": 32768,
+        "length": 4538368,
+        "cryptid": 1
+      }
+    ]
+  },
+  {
+    "path": "Frameworks/ZDMediaPickerSDK.framework/ZDMediaPickerSDK",
+    "size": 384576,
+    "encryption_commands": [
+      {
+        "offset": 32768,
+        "length": 196608,
+        "cryptid": 1
+      }
+    ]
+  },
+  {
+    "path": "Frameworks/ZohoDeskPlatformDataBridge.framework/ZohoDeskPlatformDataBridge",
+    "size": 458672,
+    "encryption_commands": [
+      {
+        "offset": 16384,
+        "length": 229376,
+        "cryptid": 1
+      }
+    ]
+  },
+  {
+    "path": "Frameworks/JWT.framework/JWT",
+    "size": 260576,
+    "encryption_commands": [
+      {
+        "offset": 16384,
+        "length": 131072,
+        "cryptid": 1
+      }
+    ]
+  },
+  {
+    "path": "Frameworks/AppticsInAppUpdate.framework/AppticsInAppUpdate",
+    "size": 111488,
+    "encryption_commands": [
+      {
+        "offset": 16384,
+        "length": 49152,
+        "cryptid": 1
+      }
+    ]
+  },
+  {
+    "path": "Frameworks/AppticsMXCrashKit.framework/AppticsMXCrashKit",
+    "size": 260272,
+    "encryption_commands": [
+      {
+        "offset": 16384,
+        "length": 114688,
+        "cryptid": 1
+      }
+    ]
+  },
+  {
+    "path": "Frameworks/ZohoDeskPortalConfiguration.framework/ZohoDeskPortalConfiguration",
+    "size": 1805120,
+    "encryption_commands": [
+      {
+        "offset": 32768,
+        "length": 1277952,
+        "cryptid": 1
+      }
+    ]
+  }
+]
