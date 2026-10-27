@@ -2,7 +2,8 @@ node_modules/
 dist/
 .DS_Store
 **/.DS_Store
-test-results/
+test-results/*
+!test-results/0.4.0/
 
 # Binaries & packages
 *.ipa

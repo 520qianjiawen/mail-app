@@ -1,22 +1,13 @@
 {
   "name": "mail-lite",
   "productName": "Mail Lite",
-  "version": "0.1.4",
+  "version": "0.4.38",
   "private": true,
-  "description": "A personal, mail-focused desktop window for Zoho Mail.",
-  "main": "src/main.cjs",
+  "description": "Native macOS mail client built with Swift, AppKit, SwiftUI and system WebKit.",
   "scripts": {
-    "start": "electron .",
-    "test": "node --test tests/*.test.cjs",
-    "test:desktop": "node scripts/desktop-smoke.cjs",
-    "test:inboxes": "node scripts/inbox-smoke.cjs",
-    "package": "node scripts/package.mjs",
-    "package:dmg": "node scripts/make-dmg.mjs",
-    "cleanup:releases": "node scripts/cleanup-old-releases.mjs"
-  },
-  "devDependencies": {
-    "@electron/packager": "20.3.0",
-    "electron": "44.9.0",
-    "playwright-core": "1.64.1"
+    "start": "bash native/run.sh",
+    "test": "bash native/test.sh",
+    "package": "bash native/build.sh",
+    "package:dmg": "bash native/package-dmg.sh"
   }
 }
