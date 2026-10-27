@@ -57,7 +57,7 @@ import UniformTypeIdentifiers
 
     let state = AppState(fixture: true)
     state.start()
-    defer { state.shutdown() }
+    defer { _ = state.shutdown() }
     guard let message = state.rows.first else { require(false, "isolated fixture message exists"); return }
     let files = [MailAttachment(id: "701", name: "opaque.bin", size: png.count, cid: "logo@fixture"),
                  MailAttachment(id: "702", name: "wrong.jpg", size: png.count, cid: "jpeg@fixture"),
@@ -114,7 +114,7 @@ import UniformTypeIdentifiers
     require(files.allSatisfy { reads[$0.id] == 1 }, "real browser traverses production AppState attachment transport once per image")
 }
 
-@MainActor private final class RasterSchemeTask: NSObject, WKURLSchemeTask {
+@MainActor private final class RasterSchemeTask: NSObject, @preconcurrency WKURLSchemeTask {
     let request: URLRequest
     var response: URLResponse?
     var bytes = Data()

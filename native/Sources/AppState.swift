@@ -1612,7 +1612,8 @@ enum ListFilter: Int, CaseIterable, Identifiable {
             guard let account = accounts.first(where: { $0.id == detail.message.accountID }) else { return }
             composeSourcePending.insert(key)
             status = "正在核对回复地址…"
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
                 do {
                     let session = self.session(account)
                     try await session.ready()
@@ -1675,7 +1676,8 @@ enum ListFilter: Int, CaseIterable, Identifiable {
         let key = draft.source?.message.key ?? draft.id
         guard !composeSourcePending.contains(key) else { return }
         composeSourcePending.insert(key); status = "正在保留原邮件内容与附件…"
-        Task { @MainActor in
+        Task { @MainActor [weak self] in
+            guard let self else { return }
             defer { self.composeSourcePending.remove(key) }
             do {
                 let prepared = try await MailComposeSource.prepare(draft, state: self)

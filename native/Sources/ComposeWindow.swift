@@ -583,52 +583,6 @@ enum ComposeDocument {
     }
 }
 
-struct RichTextEditor: NSViewRepresentable {
-    let handle: EditorHandle
-    var lightPaper = false
-    let onChange: () -> Void
-
-    final class Coordinator: NSObject, NSTextViewDelegate {
-        var parent: RichTextEditor
-        init(_ parent: RichTextEditor) { self.parent = parent }
-        func textDidChange(_ notification: Notification) { parent.onChange() }
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator(self) }
-
-    func makeNSView(context: Context) -> NSScrollView {
-        let scroll = NSScrollView()
-        scroll.hasVerticalScroller = true
-        scroll.drawsBackground = false
-        scroll.borderType = .noBorder
-        let textView = NSTextView()
-        textView.isRichText = true
-        textView.usesAdaptiveColorMappingForDarkAppearance = true
-        textView.importsGraphics = false
-        textView.font = NSFont(name: "Verdana", size: 12) ?? .systemFont(ofSize: 12)
-        textView.textContainerInset = NSSize(width: 12, height: 12)
-        textView.isAutomaticQuoteSubstitutionEnabled = false
-        textView.isAutomaticDashSubstitutionEnabled = false
-        textView.isAutomaticTextReplacementEnabled = false
-        textView.isVerticallyResizable = true
-        textView.isHorizontallyResizable = false
-        textView.autoresizingMask = [.width]
-        textView.textContainer?.widthTracksTextView = true
-        textView.allowsUndo = true
-        textView.delegate = context.coordinator
-        textView.drawsBackground = false
-        scroll.documentView = textView
-        handle.attach(textView)
-        textView.typingAttributes = [.font: NSFont(name: "Verdana", size: 12) ?? NSFont.systemFont(ofSize: 12), .foregroundColor: NSColor.textColor]
-        return scroll
-    }
-
-    func updateNSView(_ view: NSScrollView, context: Context) {
-        context.coordinator.parent = self
-        view.appearance = lightPaper ? NSAppearance(named: .aqua) : nil
-    }
-}
-
 // MARK: - SwiftUI compose
 
 struct ComposeView: View {
