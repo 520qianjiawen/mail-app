@@ -141,6 +141,8 @@ struct MessageListView: View {
     @ViewBuilder private var content: some View {
         if state.scope.kind == .outbox {
             outboxList
+        } else if isDraftsScope {
+            draftsList
         } else if state.rows.isEmpty {
             if state.loading {
                 VStack(spacing: 10) {
@@ -210,6 +212,99 @@ struct MessageListView: View {
                         }
                     }.padding(.vertical, 8)
                 }
+            }
+        }
+    }
+
+    private var isDraftsScope: Bool {
+        if state.scope.kind == .folder, let folderID = state.scope.folderID, let accountID = state.scope.accountID {
+            return state.folders(accountID).first { $0.id == folderID }?.systemName == "Drafts"
+        }
+        return false
+    }
+
+    private var currentDrafts: [MailDraft] {
+        let drafts: [MailDraft]
+        if let accountID = state.scope.accountID {
+            drafts = state.draftStore.all(accounts: [accountID])
+        } else {
+            drafts = state.draftStore.all(accounts: Set(state.accounts.map(\.id)))
+        }
+        let query = searchDraft.trimmed.lowercased()
+        if query.isEmpty { return drafts }
+        return drafts.filter {
+            $0.to.lowercased().contains(query) ||
+            $0.subject.lowercased().contains(query) ||
+            $0.body.lowercased().contains(query)
+        }
+    }
+
+    private var draftsList: some View {
+        Group {
+            let drafts = currentDrafts
+            let serverMessages = state.rows
+            if drafts.isEmpty && serverMessages.isEmpty {
+                if state.loading {
+                    VStack(spacing: 10) {
+                        ProgressView().controlSize(.small)
+                        Text("正在同步草稿…").font(.system(size: 12)).foregroundStyle(Palette.secondaryText)
+                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    VStack(spacing: 14) {
+                        EmptyState(symbol: "doc.text", title: "草稿箱为空", message: "撰写未完成的邮件会自动保存在这里，随时可以继续编辑。")
+                    }
+                }
+            } else {
+                ScrollView(.vertical) {
+                    LazyVStack(spacing: 2) {
+                        if !drafts.isEmpty {
+                            if !serverMessages.isEmpty {
+                                Text("本地草稿 (\(drafts.count))")
+                                    .font(.system(size: 10.5, weight: .semibold))
+                                    .foregroundStyle(Palette.secondaryText)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 18).padding(.top, 6).padding(.bottom, 2)
+                            }
+                            ForEach(drafts, id: \.id) { draft in
+                                DraftRow(draft: draft,
+                                         account: state.accounts.first { $0.id == draft.accountID },
+                                         compact: state.preferences.value.compactRows,
+                                         previewLines: state.preferences.value.previewLines) {
+                                    state.editDraft(draft)
+                                } onDelete: {
+                                    try? state.draftStore.remove(draft.id)
+                                    state.draftsVersion += 1
+                                    state.status = "已删除草稿"
+                                }
+                                .padding(.horizontal, 6)
+                            }
+                        }
+                        if !serverMessages.isEmpty {
+                            if !drafts.isEmpty {
+                                Text("云端草稿 (\(serverMessages.count))")
+                                    .font(.system(size: 10.5, weight: .semibold))
+                                    .foregroundStyle(Palette.secondaryText)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 2)
+                            }
+                            ForEach(serverMessages, id: \.key) { message in
+                                MessageRow(message: message,
+                                           account: state.accounts.first { $0.id == message.accountID },
+                                           labels: labels(for: message),
+                                           selected: state.selectedKeys.contains(message.key) || state.isActiveConversation(message),
+                                           compact: state.preferences.value.compactRows,
+                                           previewLines: state.preferences.value.previewLines,
+                                           accountEmail: state.email(for: message.accountID),
+                                           showAccount: state.showsAccountBadge)
+                                    .onTapGesture { select(message) }
+                                    .contextMenu { menu(for: message) }
+                                    .padding(.horizontal, 6)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 6)
+                }
+                .scrollContentBackground(.hidden)
             }
         }
     }
@@ -316,6 +411,15 @@ struct MessageListView: View {
         case .flagged: return "flag"
         case .offline: return "arrow.down.circle"
         case .sent: return "paperplane"
+        case .folder:
+            if let folderID = state.scope.folderID, let accountID = state.scope.accountID,
+               let folder = state.folders(accountID).first(where: { $0.id == folderID }) {
+                if folder.systemName == "Drafts" { return "doc.text" }
+                if folder.systemName == "Trash" { return "trash" }
+                if folder.systemName == "Spam" { return "exclamationmark.shield" }
+                if folder.systemName == "Sent" { return "paperplane" }
+            }
+            return "tray"
         default: return "tray"
         }
     }
@@ -328,6 +432,16 @@ struct MessageListView: View {
         case .flagged: return "没有标记的邮件"
         case .offline: return "没有离线保存的邮件"
         case .sent: return "没有已发送邮件"
+        case .folder:
+            if let folderID = state.scope.folderID, let accountID = state.scope.accountID,
+               let folder = state.folders(accountID).first(where: { $0.id == folderID }) {
+                if folder.systemName == "Drafts" { return "草稿箱为空" }
+                if folder.systemName == "Trash" { return "废纸篓为空" }
+                if folder.systemName == "Spam" { return "垃圾箱为空" }
+                if folder.systemName == "Sent" { return "没有已发送邮件" }
+                return "\(folder.title)为空"
+            }
+            return "文件夹为空"
         default: return state.accounts.isEmpty ? "尚未添加账号" : "收件箱为空"
         }
     }
@@ -335,6 +449,12 @@ struct MessageListView: View {
     private var emptyMessage: String {
         if state.accounts.isEmpty { return "点击左下角的 ＋ 添加账号，登录后自动汇总所有收件箱。" }
         if let error = state.accountErrors.values.first { return error }
+        if isDraftsScope { return "撰写未完成的邮件会自动保存在这里，随时可以继续编辑。" }
+        if state.scope.kind == .folder, let folderID = state.scope.folderID, let accountID = state.scope.accountID,
+           let folder = state.folders(accountID).first(where: { $0.id == folderID }) {
+            if folder.systemName == "Trash" { return "已删除的邮件会保留在废纸篓中。" }
+            if folder.systemName == "Spam" { return "被标记为垃圾邮件的内容会移至此处。" }
+        }
         return "新邮件到达时会自动出现在这里。"
     }
 
@@ -638,5 +758,111 @@ struct OutboxRow: View {
     }
     private func timeString(_ date: Date) -> String {
         let f = DateFormatter(); f.dateFormat = "HH:mm"; return f.string(from: date)
+    }
+}
+
+// MARK: - Draft list row
+
+struct DraftRow: View {
+    let draft: MailDraft
+    let account: MailAccount?
+    var compact = false
+    var previewLines = 1
+    let onOpen: () -> Void
+    let onDelete: () -> Void
+
+    @State private var hovered = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Avatar(text: draft.to.isEmpty ? "草稿" : draft.to, size: 34)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 5) {
+                    Text("草稿")
+                        .font(.system(size: 9.5, weight: .bold))
+                        .foregroundStyle(Palette.rose)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(Capsule().fill(Palette.rose.opacity(0.12)))
+
+                    Text(draft.to.isEmpty ? "未填写收件人" : "至：\(draft.to)")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(Color.primary)
+                        .lineLimit(1)
+
+                    Spacer(minLength: 4)
+
+                    Text(draft.updated.mailRelative)
+                        .font(.system(size: 10.5, weight: .regular))
+                        .foregroundStyle(Palette.tertiaryText)
+                        .monospacedDigit()
+                }
+
+                HStack(spacing: 5) {
+                    Text(draft.subject.isEmpty ? "（无主题）" : draft.subject)
+                        .font(.system(size: 12.5, weight: .regular))
+                        .foregroundStyle(Color.primary.opacity(0.88))
+                        .lineLimit(1)
+                    Spacer(minLength: 2)
+                    if !draft.files.isEmpty {
+                        Image(systemName: "paperclip").font(.system(size: 9.5)).foregroundStyle(Palette.tertiaryText)
+                    }
+                }
+
+                let preview = draftPreviewText
+                if !preview.isEmpty && previewLines > 0 {
+                    Text(preview)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Palette.secondaryText.opacity(0.75))
+                        .lineLimit(previewLines)
+                }
+
+                if hovered {
+                    HStack(spacing: 8) {
+                        Spacer()
+                        Button {
+                            onOpen()
+                        } label: {
+                            HStack(spacing: 3) {
+                                Image(systemName: "pencil")
+                                Text("继续编辑")
+                            }
+                            .font(.system(size: 11, weight: .medium))
+                        }
+                        .buttonStyle(GhostButtonStyle(tint: Palette.accent))
+
+                        Button {
+                            onDelete()
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 11))
+                        }
+                        .buttonStyle(GhostButtonStyle(tint: Palette.rose))
+                    }
+                    .padding(.top, 2)
+                }
+            }
+        }
+        .padding(.vertical, compact ? 6 : 9).padding(.horizontal, 10)
+        .background(RoundedRectangle(cornerRadius: Metrics.rowRadius, style: .continuous)
+            .fill(hovered ? Color.primary.opacity(0.04) : .clear))
+        .contentShape(Rectangle())
+        .onHover { hovered = $0 }
+        .onTapGesture { onOpen() }
+        .contextMenu {
+            Button("继续编辑") { onOpen() }
+            Divider()
+            Button("删除草稿", role: .destructive) { onDelete() }
+        }
+    }
+
+    private var draftPreviewText: String {
+        let plain = draft.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !plain.isEmpty {
+            return plain.split(whereSeparator: { $0.isNewline || $0.isWhitespace }).joined(separator: " ")
+        }
+        if let html = draft.htmlBody {
+            return MailHTML.plainText(html).split(whereSeparator: { $0.isNewline || $0.isWhitespace }).joined(separator: " ")
+        }
+        return ""
     }
 }

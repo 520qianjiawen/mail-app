@@ -2,7 +2,7 @@
 set -euo pipefail
 native_root="$(cd "$(dirname "$0")" && pwd)"
 project_root="$(dirname "$native_root")"
-native_version="0.4.43"
+native_version="0.4.44"
 native_app="$project_root/dist/$native_version/Mail Lite.app"
 native_dmg="$project_root/dist/Mail-Lite-$native_version-arm64.dmg"
 python="${MAIL_LITE_PYTHON:-python3}"
