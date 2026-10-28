@@ -82,7 +82,7 @@ struct SidebarView: View {
                        selected: state.scope.kind == .all, tint: MailFolderPalette.inbox) { state.showAllInbox() }
             SidebarRow(icon: "paperplane.fill", title: "所有已发送",
                        selected: state.scope.kind == .sent, tint: MailFolderPalette.sent) { state.showAllSent() }
-            SidebarRow(icon: "circle.inset.filled", title: "未读",
+            SidebarRow(icon: "circle.inset.filled", title: "未读", count: state.unreadTotal,
                        selected: state.scope.kind == .unread, tint: MailFolderPalette.inbox) { state.select(Scope(kind: .unread)) }
             SidebarRow(icon: "star.fill", title: "星标邮件",
                        selected: state.scope.kind == .flagged, tint: MailFolderPalette.starred) { state.select(Scope(kind: .flagged)) }
@@ -243,9 +243,12 @@ struct SidebarView: View {
 
     private func orderedFolders(_ account: MailAccount) -> [MailFolder] {
         let order = ["Inbox", "Drafts", "Sent", "Snoozed", "Outbox", "Spam", "Trash", "Templates"]
-        let all = state.folders(account.id).filter {
-            !["Notification", "Newsletter", "Templates"].contains($0.systemName ?? "") &&
-            !["Notification", "Newsletter", "Templates"].contains($0.name)
+        let all = state.folders(account.id).filter { folder in
+            if ["Notification", "Newsletter", "Templates"].contains(folder.systemName ?? "") ||
+               ["Notification", "Newsletter", "Templates"].contains(folder.name) {
+                return state.messageStore.values.contains { $0.accountID == account.id && $0.folderID == folder.id }
+            }
+            return true
         }
         let system = all.filter { $0.systemName != nil }.sorted {
             (order.firstIndex(of: $0.systemName ?? "") ?? 99) < (order.firstIndex(of: $1.systemName ?? "") ?? 99)
@@ -265,7 +268,10 @@ struct SidebarView: View {
         case "Trash": return "trash.fill"
         case "Templates": return "doc.on.doc.fill"
         case "Archive": return "archivebox.fill"
-        default: return "folder.fill"
+        default:
+            if folder.name == "Notification" { return "bell.fill" }
+            if folder.name == "Newsletter" { return "newspaper.fill" }
+            return "folder.fill"
         }
     }
 
@@ -280,14 +286,17 @@ struct SidebarView: View {
         case "Trash": return MailFolderPalette.trash
         case "Archive": return MailFolderPalette.archive
         case "Templates": return Palette.amber
-        default: return Palette.secondaryText.opacity(0.8)
+        default:
+            if folder.name == "Notification" { return Palette.amber }
+            if folder.name == "Newsletter" { return Palette.mint }
+            return Palette.secondaryText.opacity(0.8)
         }
     }
 
     private func folderCount(_ account: MailAccount, _ folder: MailFolder) -> Int {
         if folder.systemName == "Inbox" { return state.folderUnread(account.id, folder) }
-        if folder.systemName == "Drafts" { return state.folders(account.id).isEmpty ? 0 : 0 }
-        return 0
+        if folder.systemName == "Drafts" { return state.draftStore.all(accounts: [account.id]).count }
+        return state.unreadCount(accountID: account.id, folderID: folder.id)
     }
 
     private func addAccount() {

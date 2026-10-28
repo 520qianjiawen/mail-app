@@ -772,7 +772,10 @@ enum ListFilter: Int, CaseIterable, Identifiable {
         // A known server snapshot wins over a partial or stale local cache.
         // With no server counter, this remains a cached estimate, not a total.
         let current = foldersByAccount[accountID]?.first(where: { $0.id == folder.id }) ?? folder
-        return current.unread ?? unreadCount(accountID: accountID, folderID: folder.id)
+        if counterSyncedAt[accountID] != nil, let remote = current.unread {
+            return remote
+        }
+        return unreadCount(accountID: accountID, folderID: folder.id)
     }
 
     func customFolders(_ accountID: String) -> [MailFolder] {

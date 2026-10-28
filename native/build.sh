@@ -2,7 +2,7 @@
 set -euo pipefail
 native_root="$(cd "$(dirname "$0")" && pwd)"
 project_root="$(dirname "$native_root")"
-native_version="0.4.38"
+native_version="0.4.39"
 native_output="$project_root/dist/$native_version"
 native_app="$native_output/Mail Lite.app"
 mkdir -p "$native_app/Contents/MacOS" "$native_app/Contents/Resources"
