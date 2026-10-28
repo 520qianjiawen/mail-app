@@ -89,7 +89,12 @@ struct AccountSignatureSettingsView: View {
                     Picker("适用发件地址", selection: $selectedAlias) {
                         Text("整个账号").tag("*")
                         ForEach(aliases, id: \.self) { Text($0).tag($0) }
-                    }.onChange(of: selectedAlias) { _, _ in remote = []; requestID = UUID(); loading = false }
+                    }.onChange(of: selectedAlias) { _, _ in
+                        remote = state.cachedRemoteSignatures(accountID: accountID, from: remoteFrom)
+                        requestID = UUID()
+                        loading = false
+                        fetchRemote()
+                    }
                     choicePicker("新邮件", reply: false)
                     choicePicker("回复 / 回复全部 / 转发", reply: true)
                     Text("自动：仅有一个可用候选时插入；不是服务器默认设置。别名可覆盖账号规则；多候选时请选择具体签名。已手动改写的正文签名不会被自动删除。")
@@ -113,7 +118,9 @@ struct AccountSignatureSettingsView: View {
         }.disabled(committing).onAppear {
             editor.allowsRemoteImages = remoteImages
             if selectedAccount.isEmpty { selectedAccount = accountID }
+            remote = state.cachedRemoteSignatures(accountID: accountID, from: remoteFrom)
             if name.isEmpty { if let first = settings.items.first { edit(first) } else { clearEditor() } }
+            fetchRemote()
         }.onDisappear { Task { @MainActor in _ = await editor.flush(); editor.dispose() } }.onChange(of: state.accounts.map(\.id)) { _, ids in
             if !ids.contains(selectedAccount) { editingBuffers = editingBuffers.filter { ids.contains($0.key) }; selectedAccount = ids.first ?? ""; resetIdentity() }
         }
@@ -147,10 +154,11 @@ struct AccountSignatureSettingsView: View {
         }
     }
     private func resetIdentity() {
-        requestID = UUID(); selectedAlias = "*"; remote = []; loading = false
+        requestID = UUID(); selectedAlias = "*"; remote = state.cachedRemoteSignatures(accountID: accountID, from: remoteFrom); loading = false
         if let buffer = editingBuffers[accountID] { editingID = buffer.id; name = buffer.name; source = buffer.html; sourceMode = buffer.sourceMode; editor.loadHTML(buffer.html) }
         else if let first = settings.items.first { edit(first) } else { clearEditor() }
         notice = "切换账号保留本页未保存编辑；离开本页前请点击保存。"
+        fetchRemote()
     }
     private func edit(_ item: LocalMailSignature) { editingID = item.id; name = item.name; source = item.html; sourceMode = false; editor.loadHTML(item.html); notice = "" }
     private func syncSource() { /* DOM is canonical; read it only at awaited source/save boundaries. */ }
@@ -182,10 +190,14 @@ struct AccountSignatureSettingsView: View {
             do {
                 let values = try await state.fetchAccountSignatures(accountID: account, from: from)
                 guard requestID == ticket, accountID == account else { return }
-                remote = values; loading = false; notice = values.isEmpty ? "服务器没有返回签名；本机签名不受影响。" : "已读取；未更改服务器。"
+                remote = values; loading = false
+                if let first = values.first, settings.items.isEmpty, editingID == nil, name.isEmpty {
+                    editor.loadHTML(first.html)
+                    name = first.name.isEmpty ? "服务器签名" : first.name
+                }
             } catch {
                 guard requestID == ticket else { return }
-                loading = false; notice = "服务器签名读取失败；本机签名仍可使用。"
+                loading = false
             }
         }
     }
