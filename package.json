@@ -1,7 +1,7 @@
 {
   "name": "mail-lite",
   "productName": "Mail Lite",
-  "version": "0.4.38",
+  "version": "0.4.43",
   "private": true,
   "description": "Native macOS mail client built with Swift, AppKit, SwiftUI and system WebKit.",
   "scripts": {

@@ -28,6 +28,7 @@ struct SettingsView: View {
     @ObservedObject var state: AppState
     @State private var section = 0
     @State private var signatureAccountID = ""
+    @State private var selectedBccAccountID = ""
     init(state: AppState, initialSection: Int = 0) { self.state = state; _section = State(initialValue: initialSection) }
 
     var body: some View {
@@ -67,7 +68,7 @@ struct SettingsView: View {
                     ("文件夹", "folder"),
                     ("标签", "tag"),
                     ("通知", "bell"),
-                    ("阅读", "eyeglasses"),
+                    ("阅读与编写", "eyeglasses"),
                     ("假期回复", "sun.max"),
                     ("存储", "internaldrive"),
                     ("签名", "signature"),
@@ -246,7 +247,7 @@ struct SettingsView: View {
 
     private var reading: some View {
         VStack(alignment: .leading, spacing: 14) {
-            sectionTitle("阅读与界面", detail: "这些选项只影响本机显示，不改变服务器状态。")
+            sectionTitle("阅读与编写偏好", detail: "个性化设置邮件显示、编写与默认密送规则，保存在本机。")
             SettingsCard(title: "外观主题") {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
@@ -273,6 +274,39 @@ struct SettingsView: View {
                     Stepper("预览行数：\(state.preferences.value.previewLines)", value: binding(\.previewLines), in: 0...3)
                 }
             }
+            SettingsCard(title: "默认密送 (Auto-BCC)") {
+                VStack(alignment: .leading, spacing: 10) {
+                    Toggle("发信时自动密送自己", isOn: binding(\.autoBccMyself))
+                    Text("写新邮件、回复或转发时，自动将当前发件人地址加入密送；切换发件人时自动同步。")
+                        .font(.system(size: 11)).foregroundStyle(Palette.secondaryText)
+
+                    DividerLine().padding(.vertical, 2)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("通用默认密送地址")
+                            .font(.system(size: 12, weight: .medium))
+                        HStack {
+                            TextField("例如 archive@energycle.com（多地址用逗号分隔）", text: binding(\.defaultBccAddress))
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 12))
+                            if !state.preferences.value.defaultBccAddress.isEmpty {
+                                Button("清空") {
+                                    state.preferences.value.defaultBccAddress = ""
+                                    state.preferences.save()
+                                }
+                                .buttonStyle(GhostButtonStyle())
+                            }
+                        }
+                        Text("所有账号写信时均会自动包含该密送地址。")
+                            .font(.system(size: 11)).foregroundStyle(Palette.secondaryText)
+                    }
+
+                    if state.accounts.count > 1 {
+                        DividerLine().padding(.vertical, 2)
+                        accountSpecificBccSection
+                    }
+                }
+            }
             SettingsCard(title: "列表布局") {
                 HStack {
                     Text("列表宽度").font(.system(size: 12))
@@ -282,6 +316,46 @@ struct SettingsView: View {
                     Button("保存布局") { state.saveLayout() }.buttonStyle(GhostButtonStyle())
                 }
             }
+        }
+    }
+
+    private var accountSpecificBccSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("按账号单独指定密送（选填）")
+                .font(.system(size: 12, weight: .medium))
+            HStack(spacing: 8) {
+                let currentID = state.accounts.contains(where: { $0.id == selectedBccAccountID }) ? selectedBccAccountID : (state.accounts.first?.id ?? "")
+                Picker("账号", selection: Binding(get: { currentID }, set: { selectedBccAccountID = $0 })) {
+                    ForEach(state.accounts) { acc in
+                        Text(acc.name).tag(acc.id)
+                    }
+                }
+                .frame(width: 200)
+
+                TextField("此账号专用密送地址", text: Binding(get: {
+                    state.preferences.value.defaultBccByAccount[currentID] ?? ""
+                }, set: { val in
+                    let trimmed = val.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if trimmed.isEmpty {
+                        state.preferences.value.defaultBccByAccount.removeValue(forKey: currentID)
+                    } else {
+                        state.preferences.value.defaultBccByAccount[currentID] = trimmed
+                    }
+                    state.preferences.save()
+                }))
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 12))
+
+                if (state.preferences.value.defaultBccByAccount[currentID] ?? "").isEmpty == false {
+                    Button("清除") {
+                        state.preferences.value.defaultBccByAccount.removeValue(forKey: currentID)
+                        state.preferences.save()
+                    }
+                    .buttonStyle(GhostButtonStyle())
+                }
+            }
+            Text("若为此账号配置了专用密送地址，写信时会自动附加该地址。")
+                .font(.system(size: 11)).foregroundStyle(Palette.secondaryText)
         }
     }
 

@@ -161,6 +161,9 @@ struct NativePreferences: Codable {
     var vacationMessage: [String:String] = [:]
     var offlineSaved: [String] = []
     var mailReminders: [String: MailReminderRecord] = [:]
+    var autoBccMyself: Bool = false
+    var defaultBccAddress: String = ""
+    var defaultBccByAccount: [String:String] = [:]
 
     init() {}
     init(from decoder: Decoder) throws {
@@ -194,6 +197,9 @@ struct NativePreferences: Codable {
         vacationMessage = try c.decodeIfPresent([String:String].self, forKey: .vacationMessage) ?? [:]
         offlineSaved = try c.decodeIfPresent([String].self, forKey: .offlineSaved) ?? []
         mailReminders = (try? c.decodeIfPresent([String: MailReminderRecord].self, forKey: .mailReminders)) ?? [:]
+        autoBccMyself = try c.decodeIfPresent(Bool.self, forKey: .autoBccMyself) ?? false
+        defaultBccAddress = try c.decodeIfPresent(String.self, forKey: .defaultBccAddress) ?? ""
+        defaultBccByAccount = (try? c.decodeIfPresent([String:String].self, forKey: .defaultBccByAccount)) ?? [:]
     }
 }
 

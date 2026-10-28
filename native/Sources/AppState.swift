@@ -1596,12 +1596,58 @@ enum ListFilter: Int, CaseIterable, Identifiable {
 
     // MARK: - Compose
 
+    func defaultBcc(for accountID: String?, from: String?) -> String {
+        var targets: [String] = []
+
+        func appendAddresses(from text: String) {
+            let extracted = MailAddresses.extract(text)
+            if !extracted.isEmpty {
+                for addr in extracted {
+                    if !targets.contains(where: { $0.caseInsensitiveCompare(addr) == .orderedSame }) {
+                        targets.append(addr)
+                    }
+                }
+            } else {
+                for part in text.split(whereSeparator: { $0 == "," || $0 == ";" }) {
+                    let trimmed = part.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmed.isEmpty && !targets.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) {
+                        targets.append(trimmed)
+                    }
+                }
+            }
+        }
+
+        // 1. Auto-BCC myself if enabled
+        if preferences.value.autoBccMyself {
+            if let from = from, !from.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                appendAddresses(from: from)
+            }
+        }
+
+        // 2. Account-specific default BCC (if configured)
+        if let accountID = accountID,
+           let accountBcc = preferences.value.defaultBccByAccount[accountID],
+           !accountBcc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            appendAddresses(from: accountBcc)
+        }
+
+        // 3. Global default BCC address (if configured)
+        let globalBcc = preferences.value.defaultBccAddress
+        if !globalBcc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            appendAddresses(from: globalBcc)
+        }
+
+        return targets.joined(separator: ", ")
+    }
+
     func composeNew(accountID: String? = nil, to: String = "", subject: String = "", body: String = "") {
         let id = accountID ?? scope.accountID ?? accounts.first?.id
         guard let id, let account = accounts.first(where: { $0.id == id }) else { return }
         let from = sessions[id]?.addresses.first ?? account.name
-        let draft = MailDraft(accountID: id, from: from, mode: ComposeMode.new.rawValue, source: nil,
+        var draft = MailDraft(accountID: id, from: from, mode: ComposeMode.new.rawValue, source: nil,
                               to: to, subject: subject, body: body)
+        let autoBcc = defaultBcc(for: id, from: from)
+        if !autoBcc.isEmpty { draft.bcc = autoBcc }
         openCompose(draft)
     }
 
@@ -1654,6 +1700,8 @@ enum ListFilter: Int, CaseIterable, Identifiable {
         }
         let prefix = mode == .forward ? "Fwd: " : "Re: "
         value.subject = detail.message.subject.lowercased().hasPrefix(prefix.lowercased()) ? detail.message.subject : prefix + detail.message.subject
+        let autoBcc = defaultBcc(for: account.id, from: from)
+        if !autoBcc.isEmpty { value.bcc = autoBcc }
         prepareCompose(value, preferInline: true)
     }
 
@@ -1713,6 +1761,8 @@ enum ListFilter: Int, CaseIterable, Identifiable {
                               from: sessions[detail.message.accountID]?.addresses.first ?? "",
                               mode: ComposeMode.new.rawValue, source: nil,
                               to: "", subject: detail.message.subject, body: MailHTML.plainText(detail.html))
+        let autoBcc = defaultBcc(for: detail.message.accountID, from: value.from)
+        if !autoBcc.isEmpty { value.bcc = autoBcc }
         value.body = MailHTML.plainText(detail.html)
         openCompose(value)
     }

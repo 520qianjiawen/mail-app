@@ -50,9 +50,11 @@ enum MailInlineImageSend {
             try Task.checkCancellation()
             let url: URL
             do { url = try MailOfficialProtocol.imageURL(file, context: context) }
-            catch {
+            catch let failure as MailUploadResponseFailure {
+                throw failure
+            } catch {
                 throw MailUploadResponseFailure(diagnostic: .official([["resData": [["fP": file.path, "sN": file.store, "url": file.imageURL ?? ""]]]],
-                    stage: "official-image-url", failedChecks: ["origin-account-file-store-query"], requestBytes: image.data.count))
+                    stage: "official-image-url", failedChecks: ["unexpected:\(error)"], requestBytes: image.data.count))
             }
             for source in image.sources { replacements[source] = url.absoluteString }
         }
@@ -97,7 +99,8 @@ enum MailInlineImageSend {
         check("query-present", query != nil)
         let items = query ?? []
         check("query-unique", Set(items.map(\.name)).count == items.count)
-        check("query-key-set", Set(items.map(\.name)) == Set(["fileName", "accountId", "storeName", "frm"]))
+        check("query-key-set", Set(items.map(\.name)).isSubset(of: ["fileName", "accountId", "storeName", "frm", "fileId"]) &&
+                               Set(items.map(\.name)).isSuperset(of: ["fileName", "accountId", "storeName", "frm"]))
         let name = result["attachmentName"] ?? "", store = result["storeName"] ?? ""
         check("attachment-name", result["attachmentName"] != nil && !name.isEmpty && name.count <= 1000)
         check("store-name", result["storeName"] != nil && !store.isEmpty && store.count <= 256)

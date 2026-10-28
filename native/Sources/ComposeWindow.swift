@@ -175,9 +175,27 @@ enum ComposeMode: String { case new, reply, replyAll, forward, edit }
         guard !sending, !syncing else { return }
         let options = fromOptions
         guard options.indices.contains(index) else { return }
+        let oldAccountID = draft.accountID
+        let oldFrom = draft.from
+        let oldDefaultBcc = state.defaultBcc(for: oldAccountID, from: oldFrom)
+
         fromIndex = index
         draft.accountID = options[index].0
         draft.from = options[index].1
+
+        let newDefaultBcc = state.defaultBcc(for: draft.accountID, from: draft.from)
+        if bcc.trimmed == oldDefaultBcc.trimmed {
+            bcc = newDefaultBcc
+            if !newDefaultBcc.isEmpty { showBcc = true }
+        } else if !oldFrom.isEmpty && !draft.from.isEmpty && bcc.localizedCaseInsensitiveContains(oldFrom) {
+            let parts = MailAddresses.extract(bcc)
+            if parts.contains(where: { $0.caseInsensitiveCompare(oldFrom) == .orderedSame }) {
+                let updated = parts.map { $0.caseInsensitiveCompare(oldFrom) == .orderedSame ? draft.from : $0 }
+                bcc = updated.joined(separator: ", ")
+                showBcc = true
+            }
+        }
+
         loadSignatures()
         scheduleSave()
     }

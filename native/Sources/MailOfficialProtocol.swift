@@ -121,24 +121,69 @@ enum MailOfficialProtocol {
     }
 
     static func imageURL(_ file: UploadedFile, context: MailboxSession) throws -> URL {
-        guard Trust.mail(context.origin), let raw = file.imageURL, !raw.contains("\\"),
-              !raw.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains),
-              var parts = URLComponents(url: URL(string: Trust.entities(raw), relativeTo: context.origin)?.absoluteURL ?? context.origin,
-                                        resolvingAgainstBaseURL: false),
-              let initial = parts.url, Trust.mail(initial), initial.host == context.origin.host,
-              initial.fragment == nil else { throw MailOfficialFailure.imageReference }
-        // The official Android send normalizer corroborates these exact API aliases.
+        guard Trust.mail(context.origin) else {
+            throw MailUploadResponseFailure(diagnostic: .official([["resData": [["fP": file.path, "sN": file.store, "url": file.imageURL ?? ""]]]],
+                stage: "context.origin", failedChecks: ["origin-untrusted:\(context.origin)"], requestBytes: 0))
+        }
+        guard let raw = file.imageURL, !raw.contains("\\"),
+              !raw.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else {
+            throw MailUploadResponseFailure(diagnostic: .official([["resData": [["fP": file.path, "sN": file.store, "url": file.imageURL ?? ""]]]],
+                stage: "raw-url", failedChecks: ["raw-invalid:\(file.imageURL ?? "nil")"], requestBytes: 0))
+        }
+        let entitiesRaw = Trust.entities(raw)
+        guard let resolvedURL = URL(string: entitiesRaw, relativeTo: context.origin)?.absoluteURL,
+              var parts = URLComponents(url: resolvedURL, resolvingAgainstBaseURL: true) else {
+            throw MailUploadResponseFailure(diagnostic: .official([["resData": [["fP": file.path, "sN": file.store, "url": file.imageURL ?? ""]]]],
+                stage: "url-parse", failedChecks: ["components-parse-failed"], requestBytes: 0))
+        }
+        guard let initial = parts.url, Trust.mail(initial), initial.host == context.origin.host, initial.fragment == nil else {
+            throw MailUploadResponseFailure(diagnostic: .official([["resData": [["fP": file.path, "sN": file.store, "url": file.imageURL ?? ""]]]],
+                stage: "url-host", failedChecks: ["host-mismatch:urlHost=\(parts.host ?? "nil"),ctxHost=\(context.origin.host ?? "nil")"], requestBytes: 0))
+        }
         if parts.path == "/zm/ImageSignatureForAPI" { parts.path = "/zm/ImageSignature" }
         if parts.path == "/mail/ImageSignatureForAPI" { parts.path = "/mail/ImageSignature" }
-        guard ["/zm/ImageSignature", "/mail/ImageSignature"].contains(parts.path),
-              let items = parts.queryItems, Set(items.map(\.name)).count == items.count,
-              Set(items.map(\.name)).isSubset(of: ["fileName", "storeName", "accountId", "frm"]),
-              let name = items.first(where: { $0.name == "fileName" })?.value, !name.isEmpty,
-              name == (file.path as NSString).lastPathComponent,
-              items.first(where: { $0.name == "storeName" })?.value == file.store,
-              items.first(where: { $0.name == "accountId" }).map({ $0.value == context.remoteID }) ?? true,
-              items.first(where: { $0.name == "frm" }).map({ $0.value == "c" }) ?? true,
-              let url = parts.url else { throw MailOfficialFailure.imageReference }
+        guard ["/zm/ImageSignature", "/mail/ImageSignature"].contains(parts.path) else {
+            throw MailUploadResponseFailure(diagnostic: .official([["resData": [["fP": file.path, "sN": file.store, "url": file.imageURL ?? ""]]]],
+                stage: "url-path", failedChecks: ["unexpected-path:\(parts.path)"], requestBytes: 0))
+        }
+        guard let items = parts.queryItems, Set(items.map(\.name)).count == items.count else {
+            throw MailUploadResponseFailure(diagnostic: .official([["resData": [["fP": file.path, "sN": file.store, "url": file.imageURL ?? ""]]]],
+                stage: "queryItems", failedChecks: ["duplicate-or-nil-query"], requestBytes: 0))
+        }
+        let allowed: Set<String> = ["fileName", "storeName", "accountId", "frm", "fileId"]
+        let actualKeys = Set(items.map(\.name))
+        guard actualKeys.isSubset(of: allowed) else {
+            let unknown = actualKeys.subtracting(allowed).joined(separator: ",")
+            throw MailUploadResponseFailure(diagnostic: .official([["resData": [["fP": file.path, "sN": file.store, "url": file.imageURL ?? ""]]]],
+                stage: "keys-subset", failedChecks: ["unknown-keys:\(unknown)"], requestBytes: 0))
+        }
+        guard let name = items.first(where: { $0.name == "fileName" })?.value, !name.isEmpty else {
+            throw MailUploadResponseFailure(diagnostic: .official([["resData": [["fP": file.path, "sN": file.store, "url": file.imageURL ?? ""]]]],
+                stage: "name-empty", failedChecks: ["name-empty"], requestBytes: 0))
+        }
+        let expectedName = (file.path as NSString).lastPathComponent
+        guard name == file.name || name == expectedName else {
+            throw MailUploadResponseFailure(diagnostic: .official([["resData": [["fP": file.path, "sN": file.store, "url": file.imageURL ?? ""]]]],
+                stage: "name-match", failedChecks: ["name-diff:got=\(name),exp=\(expectedName)"], requestBytes: 0))
+        }
+        guard items.first(where: { $0.name == "storeName" })?.value == file.store else {
+            let gotStore = items.first(where: { $0.name == "storeName" })?.value ?? "nil"
+            throw MailUploadResponseFailure(diagnostic: .official([["resData": [["fP": file.path, "sN": file.store, "url": file.imageURL ?? ""]]]],
+                stage: "store-match", failedChecks: ["store-diff:got=\(gotStore),exp=\(file.store)"], requestBytes: 0))
+        }
+        if let accItem = items.first(where: { $0.name == "accountId" }) {
+            guard accItem.value == context.remoteID else {
+                throw MailUploadResponseFailure(diagnostic: .official([["resData": [["fP": file.path, "sN": file.store, "url": file.imageURL ?? ""]]]],
+                    stage: "acc-match", failedChecks: ["acc-diff:got=\(accItem.value ?? "nil"),ctx=\(context.remoteID)"], requestBytes: 0))
+            }
+        }
+        if let frmItem = items.first(where: { $0.name == "frm" }) {
+            guard frmItem.value == "c" else {
+                throw MailUploadResponseFailure(diagnostic: .official([["resData": [["fP": file.path, "sN": file.store, "url": file.imageURL ?? ""]]]],
+                    stage: "frm-match", failedChecks: ["frm-diff:got=\(frmItem.value ?? "nil")"], requestBytes: 0))
+            }
+        }
+        guard let url = parts.url else { throw MailOfficialFailure.imageReference }
         return url
     }
 

@@ -38,6 +38,7 @@ import UserNotifications
     }
 
     func setBadge(_ count: Int, enabled: Bool) {
-        NSApp.dockTile.badgeLabel = enabled && count > 0 ? (count > 999 ? "999+" : "\(count)") : nil
+        guard let app = NSApp else { return }
+        app.dockTile.badgeLabel = enabled && count > 0 ? (count > 999 ? "999+" : "\(count)") : nil
     }
 }

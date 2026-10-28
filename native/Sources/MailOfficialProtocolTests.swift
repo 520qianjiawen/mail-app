@@ -23,6 +23,14 @@ import Foundation
         let inline = try MailOfficialProtocol.UploadedFile.parse([["resData": [["fP": "/compose/fixture.png", "sN": "store", "url": imageURL]]]], name: "original.png", inline: true)
         require(try MailOfficialProtocol.imageURL(inline, context: context).host == origin.host,
                 "official inline URL uses its server filename rather than local upload name")
+        let imageURLWithFileID = "/zm/ImageSignature?fileName=fixture.png&storeName=store&accountId=100&fileId=123456&frm=c"
+        let inlineWithFileID = try MailOfficialProtocol.UploadedFile.parse([["resData": [["fP": "/compose/fixture.png", "sN": "store", "url": imageURLWithFileID]]]], name: "original.png", inline: true)
+        require(try MailOfficialProtocol.imageURL(inlineWithFileID, context: context).host == origin.host,
+                "official inline URL accepts optional fileId returned by server")
+        let hashedPathURL = "/zm/ImageSignature?fileName=upload.png&storeName=store&accountId=100&frm=c"
+        let hashedInline = try MailOfficialProtocol.UploadedFile.parse([["resData": [["fP": "/compose/25f5a22965edde6da00b0", "sN": "store", "url": hashedPathURL]]]], name: "upload.png", inline: true)
+        require(try MailOfficialProtocol.imageURL(hashedInline, context: context).host == origin.host,
+                "official inline URL matches uploaded file name when server returns hashed storage path")
         let attachment = try MailOfficialProtocol.UploadedFile.parse([["resData": [["fP": "/compose/file.mp4", "sN": "other"]]]], name: "测试, video.mp4", inline: false)
         let lists = MailOfficialProtocol.attachmentFields([attachment])
         require(lists["attachName"] == "测试%2C video.mp4" && lists["filePath"] == attachment.path && lists["storeName"] == attachment.store,

@@ -28,8 +28,14 @@ import WebKit
     require(MailAPI.cookieHeader([cookie],for:URL(string:"https://evilzoho.com/api/accounts")!).isEmpty,"cookie domain boundary")
     require(MailAPI.cookieHeader([cookie],for:origin.appendingPathComponent("apix" )).isEmpty,"cookie path boundary")
     let temp = FileManager.default.temporaryDirectory.appendingPathComponent("mail-native-test-\(UUID().uuidString)")
-    let prefs = PreferenceFile(directory:temp); prefs.value.accounts = [a,b]; prefs.save()
-    require(PreferenceFile(directory:temp).value.accounts.count == 2,"native settings persist")
+    let prefs = PreferenceFile(directory:temp); prefs.value.accounts = [a,b]
+    prefs.value.autoBccMyself = true
+    prefs.value.defaultBccAddress = "archive@example.test"
+    prefs.value.defaultBccByAccount = [a.id: "account-archive@example.test"]
+    prefs.save()
+    let loadedPrefs = PreferenceFile(directory:temp).value
+    require(loadedPrefs.accounts.count == 2,"native settings persist")
+    require(loadedPrefs.autoBccMyself && loadedPrefs.defaultBccAddress == "archive@example.test" && loadedPrefs.defaultBccByAccount[a.id] == "account-archive@example.test", "default bcc preferences persist and reload")
     let other=MailMessage.parse(row,accountID:b.id,remoteID:"100",folderID:"500",origin:origin)!
     let cached=MailCache(directory:temp)
     cached.store([message],account:a.id,replace:true);cached.store([other],account:b.id,replace:true)
@@ -178,6 +184,19 @@ import WebKit
     styledDraft.rtf = replyEditor.rtfData()
     let restoredDraft = try? JSONDecoder().decode(MailDraft.self, from: JSONEncoder().encode(styledDraft))
     require(restoredDraft?.priority == 1 && restoredDraft?.rtf != nil, "rich reply and priority survive draft roundtrip")
+    let testState = AppState(fixture: true)
+    testState.preferences.value.autoBccMyself = true
+    testState.preferences.value.defaultBccAddress = "global@example.test"
+    testState.preferences.value.defaultBccByAccount = [a.id: "acc@example.test"]
+    let computedBcc = testState.defaultBcc(for: a.id, from: "sender@example.test")
+    require(computedBcc.contains("sender@example.test") && computedBcc.contains("global@example.test") && computedBcc.contains("acc@example.test"), "defaultBcc computes autoBcc myself, account bcc, and global bcc")
+    testState.preferences.value.autoBccMyself = false
+    let bccWithoutSelf = testState.defaultBcc(for: a.id, from: "sender@example.test")
+    require(!bccWithoutSelf.contains("sender@example.test") && bccWithoutSelf.contains("global@example.test"), "defaultBcc omits sender when autoBccMyself is disabled")
+    var draftWithBcc = MailDraft(accountID: a.id, from: "sender@example.test", mode: "new")
+    draftWithBcc.bcc = testState.defaultBcc(for: a.id, from: "sender@example.test")
+    let composeModel = ComposeModel(state: testState, draft: draftWithBcc)
+    require(composeModel.showBcc && composeModel.bcc.contains("global@example.test"), "compose model displays bcc row when default bcc present")
     runMailSyncPolicyTests { condition, label in require(condition, label) }
     runMailUnreadCounterTests { condition, label in require(condition, label) }
     runComposeFormattingTests { condition, label in require(condition, label) }
