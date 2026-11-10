@@ -4,6 +4,7 @@ import AppKit
 struct MessageListView: View {
     @ObservedObject var state: AppState
     @State private var searchDraft = ""
+    @State private var expandedThreadKeys: Set<String> = []
     @FocusState private var searchFocused: Bool
 
     var body: some View {
@@ -37,7 +38,11 @@ struct MessageListView: View {
             }
             searchBar
             filterBar
-            if state.selectedKeys.count > 1 { batchBar }
+            if state.isDraftsScope {
+                if !state.selectedDraftIDs.isEmpty { draftsBatchBar }
+            } else if state.selectedKeys.count > 1 {
+                batchBar
+            }
         }
         .padding(.horizontal, 14)
         .padding(.top, 12)
@@ -119,6 +124,19 @@ struct MessageListView: View {
         .background(RoundedRectangle(cornerRadius: 8).fill(Palette.accent.opacity(0.07)))
     }
 
+    private var draftsBatchBar: some View {
+        HStack(spacing: 6) {
+            Text("已选择 \(state.selectedDraftIDs.count) 封草稿").font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.accent)
+            Spacer()
+            Button("全选") { state.selectAllDrafts() }.buttonStyle(GhostButtonStyle())
+            Button("删除") { state.deleteSelectedDrafts() }.buttonStyle(GhostButtonStyle(tint: Palette.rose))
+            Button { state.clearDraftSelection() } label: { Image(systemName: "xmark") }
+                .buttonStyle(.plain).foregroundStyle(Palette.tertiaryText)
+        }
+        .padding(.horizontal, 8).padding(.vertical, 5)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Palette.accent.opacity(0.07)))
+    }
+
     private var filterBar: some View {
         HStack(spacing: 6) {
             ForEach(ListFilter.allCases) { item in
@@ -163,23 +181,7 @@ struct MessageListView: View {
             ScrollView(.vertical) {
                 LazyVStack(spacing: 2) {
                     ForEach(Array(state.rows.enumerated()), id: \.element.key) { index, message in
-                        if index == 0 || (message.pinned == true) != (state.rows[index - 1].pinned == true) ||
-                            (message.pinned != true && !Calendar.current.isDate(message.date, inSameDayAs: state.rows[index - 1].date)) {
-                            Text(message.pinned == true ? "置顶" : dayLabel(message.date))
-                                .font(.system(size: 10.5, weight: .semibold)).foregroundStyle(Palette.secondaryText)
-                                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18).padding(.top, index == 0 ? 3 : 12).padding(.bottom, 4)
-                        }
-                        MessageRow(message: message,
-                                   account: state.accounts.first { $0.id == message.accountID },
-                                   labels: labels(for: message),
-                                   selected: state.selectedKeys.contains(message.key) || state.isActiveConversation(message),
-                                   compact: state.preferences.value.compactRows,
-                                   previewLines: state.preferences.value.previewLines,
-                                   accountEmail: state.email(for: message.accountID),
-                                   showAccount: state.showsAccountBadge)
-                            .onTapGesture { select(message) }
-                            .contextMenu { menu(for: message) }
-                            .padding(.horizontal, 6)
+                        messageRowItem(index: index, message: message)
                     }
                     if state.loadingMore {
                         ProgressView().controlSize(.small).padding(.vertical, 12)
@@ -188,6 +190,59 @@ struct MessageListView: View {
                 .padding(.vertical, 6)
             }
             .scrollContentBackground(.hidden)
+        }
+    }
+
+    @ViewBuilder
+    private func messageRowItem(index: Int, message: MailMessage) -> some View {
+        if index == 0 || (message.pinned == true) != (state.rows[index - 1].pinned == true) ||
+            (message.pinned != true && !Calendar.current.isDate(message.date, inSameDayAs: state.rows[index - 1].date)) {
+            Text(message.pinned == true ? "置顶" : dayLabel(message.date))
+                .font(.system(size: 10.5, weight: .semibold)).foregroundStyle(Palette.secondaryText)
+                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18).padding(.top, index == 0 ? 3 : 12).padding(.bottom, 4)
+        }
+        let threadKey = message.threadID.map { "\(message.accountID):\($0)" } ?? message.key
+        let isExpanded = expandedThreadKeys.contains(threadKey)
+        MessageRow(message: message,
+                   account: state.accounts.first { $0.id == message.accountID },
+                   labels: labels(for: message),
+                   selected: state.selectedKeys.contains(message.key) || state.isActiveConversation(message),
+                   compact: state.preferences.value.compactRows,
+                   previewLines: state.preferences.value.previewLines,
+                   accountEmail: state.email(for: message.accountID),
+                   showAccount: state.showsAccountBadge,
+                   isThreadExpanded: isExpanded,
+                   onToggleThreadExpand: {
+                       withAnimation(.easeInOut(duration: 0.18)) {
+                           if expandedThreadKeys.contains(threadKey) {
+                               expandedThreadKeys.remove(threadKey)
+                           } else {
+                               expandedThreadKeys.insert(threadKey)
+                               state.ensureThreadLoaded(message)
+                           }
+                       }
+                   })
+            .onTapGesture { select(message) }
+            .contextMenu { menu(for: message) }
+            .padding(.horizontal, 6)
+
+        if isExpanded {
+            let members = state.threadMembers(for: message)
+            VStack(spacing: 2) {
+                ForEach(members, id: \.key) { member in
+                    ThreadSubMessageRow(
+                        message: member,
+                        selected: state.selectedKeys.contains(member.key) || (state.activeKey == member.key),
+                        onSelect: {
+                            select(member)
+                        }
+                    )
+                }
+            }
+            .padding(.leading, 24)
+            .padding(.trailing, 8)
+            .padding(.bottom, 3)
+            .transition(.opacity.combined(with: .move(edge: .top)))
         }
     }
 
@@ -258,25 +313,61 @@ struct MessageListView: View {
                 ScrollView(.vertical) {
                     LazyVStack(spacing: 2) {
                         if !drafts.isEmpty {
-                            if !serverMessages.isEmpty {
-                                Text("本地草稿 (\(drafts.count))")
+                            HStack {
+                                Text(serverMessages.isEmpty ? "草稿 (\(drafts.count))" : "本地草稿 (\(drafts.count))")
                                     .font(.system(size: 10.5, weight: .semibold))
                                     .foregroundStyle(Palette.secondaryText)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, 18).padding(.top, 6).padding(.bottom, 2)
+                                Spacer()
+                                Button {
+                                    if state.selectedDraftIDs.count == drafts.count {
+                                        state.selectedDraftIDs = []
+                                    } else {
+                                        state.selectAllDrafts()
+                                    }
+                                } label: {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: state.selectedDraftIDs.count == drafts.count ? "checkmark.circle.fill" : "checkmark.circle")
+                                        Text(state.selectedDraftIDs.count == drafts.count ? "取消全选" : "全选 (⌥⌘A)")
+                                    }
+                                    .font(.system(size: 10))
+                                }
+                                .buttonStyle(GhostButtonStyle(tint: Palette.accent))
+
+                                Button {
+                                    state.deleteEmptyDrafts()
+                                } label: {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "sparkles")
+                                        Text("清理空白草稿")
+                                    }
+                                    .font(.system(size: 10))
+                                }
+                                .buttonStyle(GhostButtonStyle(tint: Palette.amber))
                             }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 18).padding(.top, 6).padding(.bottom, 2)
+
                             ForEach(drafts, id: \.id) { draft in
                                 DraftRow(draft: draft,
                                          account: state.accounts.first { $0.id == draft.accountID },
+                                         selected: state.selectedDraftIDs.contains(draft.id),
                                          compact: state.preferences.value.compactRows,
-                                         previewLines: state.preferences.value.previewLines) {
-                                    state.editDraft(draft)
-                                } onDelete: {
-                                    try? state.draftStore.remove(draft.id)
-                                    state.draftsVersion += 1
-                                    state.status = "已删除草稿"
-                                }
-                                .padding(.horizontal, 6)
+                                         previewLines: state.preferences.value.previewLines,
+                                         onOpen: { state.editDraft(draft) },
+                                         onDelete: {
+                                             try? state.draftStore.remove(draft.id)
+                                             state.selectedDraftIDs.remove(draft.id)
+                                             state.draftsVersion += 1
+                                             state.status = "已删除草稿"
+                                         },
+                                         onSelect: {
+                                             if state.selectedDraftIDs.contains(draft.id) {
+                                                 state.selectedDraftIDs.remove(draft.id)
+                                             } else {
+                                                 state.selectedDraftIDs.insert(draft.id)
+                                             }
+                                         })
+                                    .padding(.horizontal, 6)
                             }
                         }
                         if !serverMessages.isEmpty {
@@ -519,16 +610,20 @@ struct MessageListView: View {
 // MARK: - Message row
 
 struct MessageRow: View {
+    @State private var sourceCountry: String?
     let message: MailMessage
     let account: MailAccount?
     let labels: [MailLabel]
     let selected: Bool
     // Keep pointer updates local: crossing rows must not invalidate the inbox.
     @State private var hovered = false
+    @State private var badgeHovered = false
     var compact = false
     var previewLines = 1
     var accountEmail = ""
     var showAccount = false
+    var isThreadExpanded = false
+    var onToggleThreadExpand: (() -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -547,6 +642,18 @@ struct MessageRow: View {
                         Circle().fill(MailFolderPalette.inbox)
                             .frame(width: 6.5, height: 6.5)
                     }
+                    if message.replied {
+                        Image(systemName: "arrowshape.turn.up.left.fill")
+                            .font(.system(size: 8.5))
+                            .foregroundStyle(Palette.accent)
+                            .help("已回复")
+                    }
+                    if message.forwarded {
+                        Image(systemName: "arrowshape.turn.up.right.fill")
+                            .font(.system(size: 8.5))
+                            .foregroundStyle(Palette.secondaryText)
+                            .help("已转发")
+                    }
                     if message.pinned == true {
                         Image(systemName: "pin.fill").font(.system(size: 8.5)).foregroundStyle(Palette.amber)
                     }
@@ -557,6 +664,7 @@ struct MessageRow: View {
                     Spacer(minLength: 4)
                     // Both layers reserve the same geometry, avoiding a row
                     // relayout when the date changes to pointer quick actions.
+                    MailListCountryBadge(message: message, country: $sourceCountry)
                     ZStack(alignment: .trailing) {
                         Text(message.date.mailRelative)
                             .font(.system(size: 10.5, weight: message.unread ? .semibold : .regular))
@@ -575,19 +683,30 @@ struct MessageRow: View {
                         .font(.system(size: 12.5, weight: message.unread ? .medium : .regular))
                         .foregroundStyle(message.unread ? Color.primary : Palette.secondaryText)
                         .lineLimit(1)
-                    if let count = message.threadCount, count > 1 {
-                        Text("\(count)")
-                            .font(.system(size: 9.5, weight: .semibold, design: .rounded))
-                            .foregroundStyle(Palette.secondaryText)
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .background(Capsule().fill(Color.primary.opacity(0.06)))
-                    }
-                    Spacer(minLength: 2)
+                    Spacer(minLength: 4)
+                    MailTrackingMessageBadge(message: message)
                     if message.attachment {
                         Image(systemName: "paperclip").font(.system(size: 9.5)).foregroundStyle(Palette.tertiaryText)
                     }
                     if message.hasFlag {
                         Image(systemName: "star.fill").font(.system(size: 9.5)).foregroundStyle(MailFolderPalette.starred)
+                    }
+                    if let count = message.threadCount, count > 1 {
+                        HStack(spacing: 2.5) {
+                            Text("\(count)")
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            Image(systemName: isThreadExpanded ? "chevron.down" : "chevron.right")
+                                .font(.system(size: 7.5, weight: .bold))
+                        }
+                        .foregroundStyle(selected ? Palette.accent : Palette.secondaryText)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Capsule().fill(selected ? Palette.accent.opacity(0.18) : Color.primary.opacity(badgeHovered ? 0.12 : 0.06)))
+                        .contentShape(Capsule())
+                        .onHover { badgeHovered = $0 }
+                        .highPriorityGesture(TapGesture().onEnded {
+                            onToggleThreadExpand?()
+                        })
+                        .help(isThreadExpanded ? "收起会话往来邮件" : "展开会话往来邮件 (\(count) 封)")
                     }
                 }
                 if !message.preview.isEmpty, previewLines > 0 {
@@ -638,7 +757,7 @@ struct MessageRow: View {
             withTransaction(transaction) { hovered = inside }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(message.sender)，\(message.subject)，\(message.date.mailRelative)\(message.unread ? "，未读" : "")")
+        .accessibilityLabel("\(message.sender)，\(message.subject)，\(message.date.mailRelative)\(sourceCountry.map { "，来源国家：" + $0 } ?? "")\(message.unread ? "，未读" : "")")
     }
 
     private var mailboxBadge: some View {
@@ -655,6 +774,75 @@ struct MessageRow: View {
         .background(Capsule().fill(Color.primary.opacity(0.045)))
         .overlay(Capsule().strokeBorder(Palette.hairline, lineWidth: 0.5))
         .help(accountEmail)
+    }
+}
+
+// MARK: - Thread sub-message row
+
+struct ThreadSubMessageRow: View {
+    @State private var sourceCountry: String?
+    let message: MailMessage
+    let selected: Bool
+    let onSelect: () -> Void
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(alignment: .center, spacing: 8) {
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(selected ? Palette.accent : Palette.tertiaryText.opacity(0.35))
+                    .frame(width: 2.5, height: 26)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 4) {
+                        if message.unread {
+                            Circle().fill(MailFolderPalette.inbox)
+                                .frame(width: 5, height: 5)
+                        }
+                        if message.replied {
+                            Image(systemName: "arrowshape.turn.up.left.fill")
+                                .font(.system(size: 8))
+                                .foregroundStyle(Palette.accent)
+                                .help("已回复")
+                        }
+                        if message.forwarded {
+                            Image(systemName: "arrowshape.turn.up.right.fill")
+                                .font(.system(size: 8))
+                                .foregroundStyle(Palette.secondaryText)
+                                .help("已转发")
+                        }
+                        Text(message.sender.isEmpty ? "未知发件人" : message.sender)
+                            .font(.system(size: 11.5, weight: message.unread ? .semibold : .medium))
+                            .foregroundStyle(selected ? Palette.accent : Color.primary.opacity(message.unread ? 1 : 0.85))
+                            .lineLimit(1)
+                        Spacer()
+                        MailListCountryBadge(message: message, country: $sourceCountry)
+                        Text(message.date.mailRelative)
+                            .font(.system(size: 10))
+                            .foregroundStyle(selected ? Palette.accent : Palette.secondaryText)
+                    }
+                    if !message.preview.isEmpty {
+                        Text(Trust.entities(message.preview).split(whereSeparator: { $0.isWhitespace }).joined(separator: " "))
+                            .font(.system(size: 11))
+                            .foregroundStyle(message.unread ? Color.primary.opacity(0.9) : Palette.secondaryText)
+                            .lineLimit(1)
+                    } else {
+                        Text(message.subject.isEmpty ? "（无主题）" : message.subject)
+                            .font(.system(size: 11))
+                            .foregroundStyle(message.unread ? Color.primary : Palette.secondaryText)
+                            .lineLimit(1)
+                    }
+                }
+            }
+            .padding(.vertical, 5)
+            .padding(.horizontal, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(selected ? Palette.accent.opacity(0.12) : hovered ? Color.primary.opacity(0.05) : Color.primary.opacity(0.02))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovered = $0 }
     }
 }
 
@@ -766,16 +954,27 @@ struct OutboxRow: View {
 struct DraftRow: View {
     let draft: MailDraft
     let account: MailAccount?
+    var selected = false
     var compact = false
     var previewLines = 1
     let onOpen: () -> Void
     let onDelete: () -> Void
+    var onSelect: (() -> Void)? = nil
 
     @State private var hovered = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Avatar(text: draft.to.isEmpty ? "草稿" : draft.to, size: 34)
+            ZStack(alignment: .bottomTrailing) {
+                Avatar(text: draft.to.isEmpty ? "草稿" : draft.to, size: 34)
+                if selected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Palette.accent)
+                        .background(Circle().fill(Color.white).padding(1))
+                        .offset(x: 2, y: 2)
+                }
+            }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
                     Text("草稿")
@@ -786,7 +985,7 @@ struct DraftRow: View {
 
                     Text(draft.to.isEmpty ? "未填写收件人" : "至：\(draft.to)")
                         .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(Color.primary)
+                        .foregroundStyle(selected ? Palette.accent : Color.primary)
                         .lineLimit(1)
 
                     Spacer(minLength: 4)
@@ -844,24 +1043,49 @@ struct DraftRow: View {
         }
         .padding(.vertical, compact ? 6 : 9).padding(.horizontal, 10)
         .background(RoundedRectangle(cornerRadius: Metrics.rowRadius, style: .continuous)
-            .fill(hovered ? Color.primary.opacity(0.04) : .clear))
+            .fill(selected ? Palette.accent.opacity(0.12) : (hovered ? Color.primary.opacity(0.04) : .clear)))
+        .overlay(selected ? RoundedRectangle(cornerRadius: Metrics.rowRadius, style: .continuous)
+            .strokeBorder(Palette.accent.opacity(0.4), lineWidth: 1) : nil)
         .contentShape(Rectangle())
         .onHover { hovered = $0 }
-        .onTapGesture { onOpen() }
+        .onTapGesture {
+            let flags = NSApp.currentEvent?.modifierFlags ?? []
+            if flags.contains(.command) || flags.contains(.shift) {
+                onSelect?()
+            } else if selected {
+                onOpen()
+            } else {
+                onOpen()
+            }
+        }
         .contextMenu {
             Button("继续编辑") { onOpen() }
+            Divider()
+            if selected {
+                Button("取消选择") { onSelect?() }
+            } else {
+                Button("选择此草稿") { onSelect?() }
+            }
             Divider()
             Button("删除草稿", role: .destructive) { onDelete() }
         }
     }
 
     private var draftPreviewText: String {
-        let plain = draft.body.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !plain.isEmpty {
-            return plain.split(whereSeparator: { $0.isNewline || $0.isWhitespace }).joined(separator: " ")
+        if let html = draft.htmlBody, !html.isEmpty {
+            let authored = MailHTML.authoredPlainText(from: html)
+            if !authored.isEmpty {
+                return authored.split(whereSeparator: { $0.isNewline || $0.isWhitespace }).joined(separator: " ")
+            }
+            return ""
         }
-        if let html = draft.htmlBody {
-            return MailHTML.plainText(html).split(whereSeparator: { $0.isNewline || $0.isWhitespace }).joined(separator: " ")
+        var plain = draft.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let sig = draft.managedSignature?.text, !sig.isEmpty {
+            plain = plain.replacingOccurrences(of: sig.trimmingCharacters(in: .whitespacesAndNewlines), with: "")
+        }
+        let trimmed = plain.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            return trimmed.split(whereSeparator: { $0.isNewline || $0.isWhitespace }).joined(separator: " ")
         }
         return ""
     }

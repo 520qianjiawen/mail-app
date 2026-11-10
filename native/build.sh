@@ -2,12 +2,12 @@
 set -euo pipefail
 native_root="$(cd "$(dirname "$0")" && pwd)"
 project_root="$(dirname "$native_root")"
-native_version="0.4.44"
+native_version="0.4.71"
 native_output="$project_root/dist/$native_version"
 native_app="$native_output/Mail Lite.app"
 mkdir -p "$native_app/Contents/MacOS" "$native_app/Contents/Resources"
 xcrun swiftc -swift-version 5 -O -target arm64-apple-macosx14.0 \
-  -framework AppKit -framework WebKit -framework CryptoKit -framework ImageIO -framework PDFKit -framework Quartz -framework SwiftUI -framework UserNotifications -lsqlite3 \
+  -framework AppKit -framework WebKit -framework CryptoKit -framework Security -framework ImageIO -framework PDFKit -framework Quartz -framework SwiftUI -framework UserNotifications -lsqlite3 \
   "$native_root"/Sources/*.swift -o "$native_app/Contents/MacOS/Mail Lite"
 cp "$project_root/assets/Mail_macOS.icns" "$native_app/Contents/Resources/MailLite.icns"
 xcrun actool "$project_root/assets/Mail_macOS.icon" --compile "$native_app/Contents/Resources" \

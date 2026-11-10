@@ -59,6 +59,26 @@ import WebKit
     require(order == true, "reply signature uses a structural quote boundary")
     let quoteCSS = await reply.inspectDOM("return getComputedStyle(document.querySelector('blockquote')).fontSize;") as? String
     require(quoteCSS == "26.6667px" || quoteCSS == "26.666666px", "reply quote retains independent original typography")
+    let replyMessage = MailMessage(accountID: "fixture", remoteID: "100", folderID: "500", id: "701",
+                                   origin: URL(string: "https://mail.zoho.com")!, subject: "Background reply",
+                                   sender: "sender@example.test", preview: "", date: Date(), attachment: false,
+                                   unread: false)
+    let replySource = MailDetail(message: replyMessage, from: replyMessage.sender, to: "reader@example.test",
+                                 cc: "", replyTo: "", html: "<blockquote>Original message</blockquote>",
+                                 attachments: [], inline: [], replyHeadersChecked: true)
+    let backgroundReply = WebHTMLComposerHandle()
+    let backgroundWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 400),
+                                    styleMask: [.titled], backing: .buffered, defer: false)
+    backgroundWindow.isReleasedWhenClosed = false
+    backgroundWindow.contentView = backgroundReply.webView
+    backgroundReply.loadReplyForMessageInBackground(body: "", source: replySource)
+    require(backgroundReply.isPreparingReply, "reply preparation exposes a busy state before processing its quote")
+    let backgroundSnapshot = await backgroundReply.flush()
+    require(!backgroundReply.isPreparingReply && backgroundSnapshot.outgoingHTML.contains("Original message"),
+            "background reply preparation completes before flush and preserves the original quote")
+    backgroundWindow.contentView = nil
+    backgroundWindow.close()
+    backgroundReply.dispose()
     let noQuote = WebHTMLComposerHandle(); noQuote.setText(ComposeDocument.quoteMarker)
     let guessed = await noQuote.replaceManagedSignatureHTML(rich, reference: "a", identity: "account:a", beforeQuote: true, allowInsert: true)
     require(guessed == .protected, "quote-like body text is never mistaken for structural quote ownership")

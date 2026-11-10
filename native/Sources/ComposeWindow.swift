@@ -12,6 +12,8 @@ enum ComposeMode: String { case new, reply, replyAll, forward, edit }
     let window: NSWindow
     var busy: Bool { model.sending || model.syncing }
     var draft: MailDraft { model.draft }
+    private var isClosing = false
+    private var didClose = false
 
     init(state: AppState, draft: MailDraft) {
         self.state = state
@@ -28,6 +30,7 @@ enum ComposeMode: String { case new, reply, replyAll, forward, edit }
         let host = NSHostingView(rootView: ComposeView(model: model))
         window.contentView = host
         model.onClose = { [weak self] in self?.closeWindow() }
+        model.onDismiss = { [weak self] in self?.close(save: true) }
     }
 
     func show() {
@@ -37,17 +40,47 @@ enum ComposeMode: String { case new, reply, replyAll, forward, edit }
     }
 
     func close(save: Bool) {
-        if !save { closeWindow(); return }
-        model.editor.setEditingEnabled(false)
-        Task { @MainActor in
-            guard await model.persistDraftFlushed() else { model.editor.setEditingEnabled(true); model.status = "草稿保存失败，请重试"; return }
+        if isClosing {
             closeWindow()
+            return
+        }
+        isClosing = true
+        if !save || model.isCompletelyEmptyNewDraft {
+            model.discard()
+            closeWindow()
+            return
+        }
+        model.editor.setEditingEnabled(false)
+        model.cloudTask?.cancel()
+        model.syncing = false
+        Task { @MainActor in
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                var finished = false
+                Task { @MainActor in
+                    _ = await self.model.persistDraftFlushed()
+                    if !finished {
+                        finished = true
+                        continuation.resume()
+                    }
+                }
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    if !finished {
+                        finished = true
+                        continuation.resume()
+                    }
+                }
+            }
+            self.model.persistFallbackDraft()
+            self.closeWindow()
         }
     }
     func persistDraft() { model.persistDraft() }
     func persistDraftFlushed() async -> Bool { await model.persistDraftFlushed() }
 
     private func closeWindow() {
+        guard !didClose else { return }
+        didClose = true
         model.stopBackgroundWork()
         window.delegate = nil
         window.close()
@@ -55,7 +88,8 @@ enum ComposeMode: String { case new, reply, replyAll, forward, edit }
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        if busy { return false }
+        if model.sending { return false }
+        if isClosing { return true }
         close(save: true)
         return false
     }
@@ -68,6 +102,7 @@ enum ComposeMode: String { case new, reply, replyAll, forward, edit }
     var draft: MailDraft
     let editor = WebHTMLComposerHandle()
     var onClose: (() -> Void)?
+    var onDismiss: (() -> Void)?
     private var signatureTask: Task<Void, Never>?
     private var signatureApplicationTask: Task<Void, Never>?
     private var automaticSignatureEligible = false
@@ -87,12 +122,14 @@ enum ComposeMode: String { case new, reply, replyAll, forward, edit }
     @Published var showBcc: Bool
     @Published var fromIndex: Int = 0
     @Published var receipt: Bool
+    @Published var trackingEnabled: Bool
     @Published var priority: Int
     @Published var scheduledAt: Date?
     @Published var attachments: [URL] = []
     @Published var status = ""
     @Published var sending = false { didSet { editor.setEditingEnabled(!sending && !syncing) } }
     @Published var syncing = false { didSet { editor.setEditingEnabled(!sending && !syncing) } }
+    @Published private(set) var preparingReply = false
     var busy: Bool { sending || syncing }
     @Published var signatureOptions: [MailSignature] = []
     @Published var showSchedulePicker = false
@@ -102,8 +139,28 @@ enum ComposeMode: String { case new, reply, replyAll, forward, edit }
 
     var fromOptions: [(String, String)] {
         var values: [(String, String)] = []
-        for id in draft.mode == ComposeMode.new.rawValue && draft.cloudID == nil ? state.accounts.map({ $0.id }) : [draft.accountID] {
-            let addresses = state.sessions[id]?.addresses ?? (id == draft.accountID && !draft.from.isEmpty ? [draft.from] : [])
+        let accountIDs: [String]
+        if draft.cloudID == nil {
+            var ids = [draft.accountID]
+            for acc in state.accounts {
+                if !ids.contains(acc.id) { ids.append(acc.id) }
+            }
+            accountIDs = ids
+        } else {
+            accountIDs = [draft.accountID]
+        }
+        for id in accountIDs {
+            let sessionAddresses = state.sessions[id]?.addresses ?? []
+            let addresses: [String]
+            if !sessionAddresses.isEmpty {
+                addresses = sessionAddresses
+            } else if let accName = state.accounts.first(where: { $0.id == id })?.name, !accName.isEmpty {
+                addresses = [accName]
+            } else if id == draft.accountID && !draft.from.isEmpty {
+                addresses = [draft.from]
+            } else {
+                addresses = []
+            }
             for address in addresses { values.append((id, address)) }
         }
         return values
@@ -125,7 +182,7 @@ enum ComposeMode: String { case new, reply, replyAll, forward, edit }
         }
     }
     var canSend: Bool {
-        !sending && !syncing && draft.state == "editing" && !draft.cloudUncertain && editor.failure == nil &&
+        !sending && !syncing && !preparingReply && draft.state == "editing" && !draft.cloudUncertain && editor.failure == nil &&
         !state.outboxStore.all().contains { ($0.draftID == draft.id || $0.id == draft.queuedItemID) && $0.state != "cancelled" }
     }
 
@@ -136,10 +193,12 @@ enum ComposeMode: String { case new, reply, replyAll, forward, edit }
         showCc = !draft.cc.isEmpty || ComposeMode(rawValue: draft.mode) == .replyAll
         showBcc = !draft.bcc.isEmpty
         receipt = draft.receipt
+        trackingEnabled = draft.trackingEnabled ?? false
         priority = [1, 3, 5].contains(draft.priority ?? 3) ? (draft.priority ?? 3) : 3
         attachments = state.draftStore.files(draft)
         super.init()
         editor.onPasteError = { [weak self] message in self?.status = message }
+        editor.onReplyPreparationChange = { [weak self] in self?.preparingReply = $0 }
         let restored = draft.htmlBody != nil && draft.htmlSignature != nil
         if let html = draft.htmlBody {
             editor.restoreHTML(html, signature: draft.htmlSignature)
@@ -148,7 +207,7 @@ enum ComposeMode: String { case new, reply, replyAll, forward, edit }
             let data = try? value.data(from: NSRange(location: 0, length: value.length), documentAttributes: [.documentType: NSAttributedString.DocumentType.html])
             editor.loadHTML(data.flatMap { String(data: $0, encoding: .utf8) } ?? MailHTML.escape(value.string))
         } else if let source = draft.source, [.reply, .replyAll, .forward].contains(mode) {
-            editor.loadReplyHTML(body: "<div style=\"font:12pt Verdana,Arial,sans-serif;color:#000\">" + MailHTML.escape(draft.body).replacingOccurrences(of: "\n", with: "<br>") + "<br></div>", quote: ComposeDocument.webQuote(source: source))
+            editor.loadReplyForMessageInBackground(body: draft.body, source: source)
         } else { editor.setText(draft.body) }
         automaticSignatureEligible = restored || draft.htmlBody == nil && draft.rtf == nil && draft.body.isEmpty && mode != .edit
         if restored { signaturePreserveIdentity = SignaturePolicy.identity(account: draft.accountID, from: draft.from) }
@@ -252,6 +311,10 @@ enum ComposeMode: String { case new, reply, replyAll, forward, edit }
 
     func send(schedule: Bool = false, archiveOriginal: Bool = false) {
         guard canSend else { return }
+        if trackingEnabled && !state.tracking.connected {
+            status = "请先配置自己的追踪服务，或关闭邮件追踪后发送。"
+            return
+        }
         guard let addresses = MailAddresses.validated(to), !addresses.isEmpty,
               let copies = MailAddresses.validated(cc), let blind = MailAddresses.validated(bcc) else {
             status = "请检查收件人、抄送和密送地址"
@@ -272,8 +335,10 @@ enum ComposeMode: String { case new, reply, replyAll, forward, edit }
         captured.draftID = draft.id
         if mode == .edit, draft.cloudID != nil { captured.serverDraft = draft.source?.message }
         captured.receipt = receipt
+        captured.trackingEnabled = trackingEnabled
         captured.priority = priority
         captured.replyToMessageID = mode == .reply || mode == .replyAll ? draft.source?.message.id : nil
+        captured.forwardOf = mode == .forward ? draft.source?.message : nil
         if captured.replyToMessageID != nil {
             captured.replySource = draft.source?.message
             captured.inReplyTo = draft.source?.rfcMessageID
@@ -324,6 +389,7 @@ enum ComposeMode: String { case new, reply, replyAll, forward, edit }
     func scheduleSave() {
         draft.to = to; draft.cc = cc; draft.bcc = bcc; draft.subject = subject
         draft.receipt = receipt
+        draft.trackingEnabled = trackingEnabled
         draft.priority = priority
         draft.updated = Date()
         NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(saveNow), object: nil)
@@ -343,9 +409,12 @@ enum ComposeMode: String { case new, reply, replyAll, forward, edit }
     @discardableResult func persistDraftFlushed() async -> Bool {
         guard draft.state != "sent" else { return true }
         let snapshot = await editor.flush()
-        guard editor.failure == nil, draft.state != "sent" else { return draft.state == "sent" }
+        guard editor.failure == nil, draft.state != "sent" else {
+            persistFallbackDraft()
+            return draft.state == "sent"
+        }
         draft.to = to; draft.cc = cc; draft.bcc = bcc; draft.subject = subject
-        draft.receipt = receipt; draft.priority = priority
+        draft.receipt = receipt; draft.priority = priority; draft.trackingEnabled = trackingEnabled
         draft.body = snapshot.text
         draft.htmlBody = snapshot.html; draft.htmlSignature = snapshot.signature
         draft.rtf = nil; draft.managedSignature = nil
@@ -354,7 +423,41 @@ enum ComposeMode: String { case new, reply, replyAll, forward, edit }
             try state.draftStore.save(draft)
             state.draftsVersion += 1
             return true
-        } catch { return false }
+        } catch {
+            persistFallbackDraft()
+            return false
+        }
+    }
+
+    var isCompletelyEmptyNewDraft: Bool {
+        guard mode == .new else { return false }
+        let hasTo = !to.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasCc = !cc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasSubject = !subject.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasFiles = !attachments.isEmpty
+        // Strip signature/quote blocks before checking body — a new draft with only
+        // a pre-inserted signature but no authored content is still considered empty.
+        let html = editor.canonicalHTML
+        let authoredText: String
+        if html.isEmpty {
+            authoredText = editor.plainText().trimmingCharacters(in: .whitespacesAndNewlines)
+        } else {
+            authoredText = MailHTML.authoredPlainText(from: html)
+        }
+        return !hasTo && !hasCc && !hasSubject && !hasFiles && authoredText.isEmpty
+    }
+
+    func persistFallbackDraft() {
+        guard draft.state != "sent" else { return }
+        draft.to = to; draft.cc = cc; draft.bcc = bcc; draft.subject = subject
+        draft.receipt = receipt; draft.priority = priority; draft.trackingEnabled = trackingEnabled
+        if !editor.canonicalHTML.isEmpty {
+            draft.htmlBody = editor.canonicalHTML
+        }
+        draft.files = attachments.map { $0.path }
+        draft.updated = Date()
+        try? state.draftStore.save(draft)
+        state.draftsVersion += 1
     }
 
     func stopBackgroundWork() {
@@ -665,7 +768,16 @@ struct ComposeView: View {
                     model.scheduleSave()
                     Task { @MainActor in editorEmpty = await model.editor.flush().text.trimmed.isEmpty }
                 }
-                if editorEmpty {
+                if model.preparingReply {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("正在准备原邮件引用…")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Palette.secondaryText)
+                    }
+                    .padding(.leading, 18).padding(.top, 16)
+                    .allowsHitTesting(false)
+                } else if editorEmpty {
                     Text("在此输入回复…")
                         .font(.system(size: 13))
                         .foregroundStyle(Color.secondary)
@@ -673,6 +785,7 @@ struct ComposeView: View {
                         .allowsHitTesting(false)
                 }
             }
+            .allowsHitTesting(!model.preparingReply)
             .accessibilityIdentifier("compose.messageBody")
             .background(lightPaper ? Color.white : composeSurface)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -736,6 +849,12 @@ struct ComposeView: View {
             .accessibilityIdentifier("compose.formatToggle")
             .help("显示或收起格式工具（⇧⌘T）")
             signatureMenu
+            Toggle(isOn: Binding(get: { model.trackingEnabled }, set: { model.trackingEnabled = $0; model.scheduleSave() })) {
+                Label("追踪", systemImage: "eye")
+            }
+            .toggleStyle(.button).controlSize(.small)
+            .help("记录这封邮件的打开情况；需要在设置中连接自己的追踪服务。")
+            .accessibilityIdentifier("compose.mailTracking")
             Menu {
                 Button("稍后发送…", systemImage: "clock.badge.checkmark") { model.showSchedulePicker = true }
                     .disabled(!model.canSend)
@@ -753,6 +872,8 @@ struct ComposeView: View {
                 }
                 Divider()
                 Toggle("请求已读回执", isOn: Binding(get: { model.receipt }, set: { model.receipt = $0; model.scheduleSave() }))
+                Toggle("邮件追踪", isOn: Binding(get: { model.trackingEnabled }, set: { model.trackingEnabled = $0; model.scheduleSave() }))
+                Button("邮件追踪设置…") { model.state.showTrackingSettings() }
                 Menu("优先级") {
                     Button("高") { model.priority = 1 }
                     Button("普通") { model.priority = 3 }
@@ -814,6 +935,19 @@ struct ComposeView: View {
                     .help("关闭回复并保存草稿（Esc）")
                     .accessibilityLabel("关闭回复")
                 }
+            } else {
+                toolbarDivider
+                Button {
+                    model.onDismiss?()
+                } label: {
+                    Image(systemName: "xmark")
+                        .frame(width: 26, height: 26)
+                }
+                .buttonStyle(.plain)
+                .help("关闭窗口并保存草稿（⌘W 或 Esc）")
+                .accessibilityLabel("关闭窗口")
+                .keyboardShortcut("w", modifiers: .command)
+                .keyboardShortcut(.cancelAction)
             }
         }
         .font(.system(size: 13))
@@ -844,6 +978,9 @@ struct ComposeView: View {
                     .frame(width: 48, alignment: .leading)
                 Menu {
                     ForEach(Array(model.fromOptions.enumerated()), id: \.offset) { index, option in
+                        if index > 0 && option.0 != model.fromOptions[index - 1].0 {
+                            Divider()
+                        }
                         Button { model.applyFrom(index) } label: {
                             if index == model.fromIndex {
                                 Label(model.senderLabel(accountID: option.0, address: option.1), systemImage: "checkmark")
@@ -1100,6 +1237,7 @@ struct ComposeView: View {
                 .textSelection(.enabled)
             Spacer()
             if model.receipt { Label("已读回执", systemImage: "envelope.badge") }
+            if model.trackingEnabled { Label("邮件追踪", systemImage: "eye") }
             if model.priority != 3 { Label(model.priority == 1 ? "高优先级" : "低优先级", systemImage: "flag") }
             if let scheduled = model.scheduledAt {
                 Text("定时：" + scheduled.mailRelative + " " + timeString(scheduled))

@@ -48,8 +48,12 @@ enum MailComposeSource {
             if let element = node as? XMLElement, element.name?.lowercased() == "img" { imageNodes.append(element) }
             pending.append(contentsOf: node.children ?? [])
         }
-        var resolved: [String: String] = [:]
-        var projectedBytes = source.html.utf8.count
+        // Resolve every authenticated image up front. Distinct resources load
+        // concurrently (bytes the reader already fetched come from memory), so a
+        // quote with many images no longer waits for one download after another.
+        struct Pending { let element: XMLElement; let raw: String; let key: String? }
+        var plan: [Pending] = []
+        var fetches: [String: @MainActor () async throws -> Data] = [:]
         for element in imageNodes {
             let raw = MailInlineImageReference.imageSource(from: element) ?? ""
             let alt = element.attribute(forName: "alt")?.stringValue
@@ -57,37 +61,64 @@ enum MailComposeSource {
             let file = MailInlineImageReference.attachment(for: raw, alt: alt, inline: source.inline) ?? source.inline.first { $0.id == localID }
             let provider = MailInlineImageReference.sessionImageURL(raw, origin: source.message.origin)
             guard file != nil || provider != nil || raw.lowercased().hasPrefix("cid:") || localID != nil else {
-                if !raw.isEmpty {
-                    element.removeAttribute(forName: "src")
-                    element.addAttribute(XMLNode.attribute(withName: "src", stringValue: raw) as! XMLNode)
+                plan.append(Pending(element: element, raw: raw, key: nil)); continue
+            }
+            let key = file.map { "attachment:" + $0.id } ?? raw
+            if fetches[key] == nil {
+                if let file { fetches[key] = { try await state.attachmentData(file, message: source.message) } }
+                else if provider != nil { fetches[key] = { try await state.sessionImageData(raw, message: source.message) } }
+                else { throw Failure.image }
+            }
+            plan.append(Pending(element: element, raw: raw, key: key))
+        }
+        var resolved: [String: String] = [:]
+        if !fetches.isEmpty {
+            try check()
+            do {
+                let jobs = Array(fetches)
+                try await withThrowingTaskGroup(of: (String, Data).self) { group in
+                    var next = 0
+                    func enqueue() {
+                        guard next < jobs.count else { return }
+                        let (key, fetch) = jobs[next]; next += 1
+                        group.addTask { @MainActor in (key, try await fetch()) }
+                    }
+                    for _ in 0..<min(4, jobs.count) { enqueue() }
+                    while let (key, data) = try await group.next() {
+                        try check()
+                        guard let image = quoteImage(data) else { throw Failure.image }
+                        resolved[key] = "data:\(image.mime);base64,\(image.data.base64EncodedString())"
+                        enqueue()
+                    }
+                }
+                try check()
+            } catch { throw Failure.image }
+        }
+        var projectedBytes = source.html.utf8.count
+        for item in plan {
+            guard let key = item.key else {
+                if !item.raw.isEmpty {
+                    item.element.removeAttribute(forName: "src")
+                    item.element.addAttribute(XMLNode.attribute(withName: "src", stringValue: item.raw) as! XMLNode)
                 }
                 continue
             }
-            let key = file.map { "attachment:" + $0.id } ?? raw
-            let dataURL: String
-            if let cached = resolved[key] { dataURL = cached }
-            else {
-                try check()
-                let data: Data
-                do {
-                    if let file { data = try await state.attachmentData(file, message: source.message) }
-                    else if provider != nil { data = try await state.sessionImageData(raw, message: source.message) }
-                    else { throw Failure.image }
-                    try check()
-                } catch { throw Failure.image }
-                guard let image = quoteImage(data) else { throw Failure.image }
-                dataURL = "data:\(image.mime);base64,\(image.data.base64EncodedString())"
-                resolved[key] = dataURL
-            }
-            let growth = max(0, dataURL.utf8.count - raw.utf8.count)
+            guard let dataURL = resolved[key] else { throw Failure.image }
+            let growth = max(0, dataURL.utf8.count - item.raw.utf8.count)
             guard growth <= MailBodyPolicy.maximumBytes - projectedBytes else { throw MailInlineImageSend.Failure.bodyTooLarge }
             projectedBytes += growth
-            element.removeAttribute(forName: "src")
-            element.addAttribute(XMLNode.attribute(withName: "src", stringValue: dataURL) as! XMLNode)
+            item.element.removeAttribute(forName: "src")
+            item.element.addAttribute(XMLNode.attribute(withName: "src", stringValue: dataURL) as! XMLNode)
         }
         let body = (try? document.nodes(forXPath: "//body").first)?.children?.map { $0.xmlString(options: .nodeCompactEmptyElement) }.joined() ?? source.html
-        guard let clean = SignatureHTML.sanitizeBody(body) else { throw Failure.quote }
-        _ = try MailInlineImageSend.prepare(clean)
+        // Sanitizing a quote that now carries base64 images takes ~1 s per 8 MB;
+        // keep it off the main thread so the window stays responsive.
+        let clean = try await Task.detached(priority: .userInitiated) { () throws -> String in
+            guard let clean = SignatureHTML.sanitizeBody(body) else { throw Failure.quote }
+            _ = try MailInlineImageSend.prepare(clean)
+            return clean
+        }.value
+        try check()
         var prepared = MailDetail(message: source.message, from: source.from, to: source.to, cc: source.cc,
                                   replyTo: source.replyTo, html: clean, attachments: source.attachments, inline: [])
         prepared.rfcMessageID = source.rfcMessageID; prepared.rfcReferences = source.rfcReferences; prepared.rfcInReplyTo = source.rfcInReplyTo

@@ -343,7 +343,13 @@ import UserNotifications
 }
 
 MainActor.assumeIsolated {
-    if CommandLine.arguments.contains("--send-repair-test") {
+    if let index = CommandLine.arguments.firstIndex(of: "--ip-database-check"), CommandLine.arguments.count > index + 1 {
+        do {
+            let database = try MailIPDatabase(data: Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[index + 1])))
+            guard let location = database.location("67.195.1.2") else { throw MailIPDatabase.Failure.invalid }
+            print("PASS: \(database.count) ranges; sample 67.195.1.2: \(location)"); exit(0)
+        } catch { print("FAIL: invalid IP database"); exit(1) }
+    } else if CommandLine.arguments.contains("--send-repair-test") {
         let app = NSApplication.shared
         app.setActivationPolicy(.prohibited)
         DispatchQueue.main.asyncAfter(deadline: .now() + 120) { print("FAIL: send repair checks timed out"); fflush(stdout); exit(1) }
@@ -383,6 +389,72 @@ MainActor.assumeIsolated {
             }
             print("\(failures == 0 ? "PASS" : "FAIL"): \(checks) isolated workflow repair checks (\(failures) failures).")
             fflush(stdout); exit(failures == 0 ? 0 : 1)
+        }
+        app.run()
+    } else if CommandLine.arguments.contains("--mail-tracking-test") {
+        let app = NSApplication.shared
+        app.setActivationPolicy(.prohibited)
+        Task { @MainActor in
+            var checks = 0, failures = 0
+            await runMailTrackingTests { passed, label in
+                checks += 1
+                if !passed { failures += 1; print("FAIL [mail-tracking]: \(label)") }
+            }
+            print("\(failures == 0 ? "PASS" : "FAIL"): \(checks) isolated mail tracking checks (\(failures) failures).")
+            fflush(stdout); exit(failures == 0 ? 0 : 1)
+        }
+        app.run()
+    } else if CommandLine.arguments.contains("--configure-tracking-service") {
+        let app = NSApplication.shared
+        app.setActivationPolicy(.prohibited)
+        let input = FileHandle.standardInput.readDataToEndOfFile()
+        guard input.count <= 4096, let configuration = try? JSONDecoder().decode(MailTrackingConnection.self, from: input), configuration.valid else {
+            print("FAIL: invalid private service configuration"); exit(1)
+        }
+        Task { @MainActor in
+            let prefs = PreferenceFile()
+            let controller = MailTrackingController(directory: prefs.directory)
+            await controller.connect(configuration)
+            print(controller.connected ? "PASS: own tracking service authenticated; configuration saved in macOS Keychain." : "FAIL: " + (controller.error ?? "service unavailable"))
+            fflush(stdout); exit(controller.connected ? 0 : 1)
+        }
+        app.run()
+    } else if CommandLine.arguments.contains("--tracking-service-roundtrip-test") {
+        let app = NSApplication.shared
+        app.setActivationPolicy(.prohibited)
+        Task { @MainActor in
+            do {
+                guard let configuration = try MailTrackingKeychain.load(), configuration.valid else { throw MailTrackingFailure.disconnected }
+                let api = MailTrackingAPI()
+                try await api.validate(configuration)
+                let tid = MailTrackingHTML.tid()
+                let fragment = try await api.register(tid: tid, connection: configuration)
+                let same = try await api.register(tid: tid, connection: configuration)
+                guard fragment == same else { throw MailTrackingFailure.response }
+                let pattern = try NSRegularExpression(pattern: #"src="([^"]+)""#)
+                guard let match = pattern.firstMatch(in: fragment, range: NSRange(fragment.startIndex..., in: fragment)),
+                      let range = Range(match.range(at: 1), in: fragment), let image = URL(string: String(fragment[range])) else { throw MailTrackingFailure.response }
+                func count() async throws -> Int {
+                    let (events, _, _) = try await api.logs(after: 0, connection: configuration)
+                    return events.filter { $0.tid == tid && $0.valid }.count
+                }
+                func visit() async throws {
+                    var request = URLRequest(url: image)
+                    request.setValue("MailLiteControlledTest/1.0", forHTTPHeaderField: "User-Agent")
+                    let (bytes, response) = try await api.session.data(for: request)
+                    guard (response as? HTTPURLResponse)?.statusCode == 200, bytes.starts(with: [0x89,0x50,0x4e,0x47]) else { throw MailTrackingFailure.response }
+                }
+                guard try await count() == 0 else { throw MailTrackingFailure.response }
+                try await visit()
+                guard try await count() == 1 else { throw MailTrackingFailure.response }
+                try await visit()
+                guard try await count() == 1 else { throw MailTrackingFailure.response }
+                try await Task.sleep(nanoseconds: 3_200_000_000)
+                try await visit()
+                guard try await count() == 2 else { throw MailTrackingFailure.response }
+                print("PASS: owned service registration is idempotent; public pixel works; opens 0 -> 1 -> 1 (duplicate) -> 2. No email sent.")
+                fflush(stdout); exit(0)
+            } catch { print("FAIL: " + error.localizedDescription); fflush(stdout); exit(1) }
         }
         app.run()
     } else if CommandLine.arguments.contains("--self-test") {

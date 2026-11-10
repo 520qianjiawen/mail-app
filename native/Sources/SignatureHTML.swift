@@ -28,7 +28,7 @@ enum SignatureHTML {
     private static let tags = Set("a abbr b bdi bdo blockquote br caption center code col colgroup dd del div dl dt em font h1 h2 h3 h4 h5 h6 hr i img ins li ol p pre s small span strong sub sup table tbody td tfoot th thead tr u ul".split(separator: " ").map(String.init))
     private static let discard = Set("script iframe frame frameset form input button textarea select option object embed svg math template noscript link meta base audio video source canvas style".split(separator: " ").map(String.init))
     private static let voids: Set<String> = ["br", "hr", "img", "col"]
-    private static let properties = Set("color background background-color font font-family font-size font-style font-weight font-variant font-stretch line-height text-align text-decoration text-decoration-color text-decoration-style text-transform text-indent text-shadow letter-spacing word-spacing white-space word-break overflow-wrap vertical-align border border-top border-right border-bottom border-left border-color border-style border-width border-top-color border-right-color border-bottom-color border-left-color border-top-style border-right-style border-bottom-style border-left-style border-top-width border-right-width border-bottom-width border-left-width border-collapse border-spacing border-radius padding padding-top padding-right padding-bottom padding-left margin margin-top margin-right margin-bottom margin-left width min-width max-width height min-height max-height table-layout display float clear box-sizing list-style-type list-style-position direction unicode-bidi opacity".split(separator: " ").map(String.init))
+    private static let properties = Set("color background background-color background-image font font-family font-size font-style font-weight font-variant font-stretch line-height text-align text-decoration text-decoration-color text-decoration-style text-transform text-indent text-shadow letter-spacing word-spacing white-space word-break overflow-wrap vertical-align border border-top border-right border-bottom border-left border-color border-style border-width border-top-color border-right-color border-bottom-color border-left-color border-top-style border-right-style border-bottom-style border-left-style border-top-width border-right-width border-bottom-width border-left-width border-collapse border-spacing border-radius padding padding-top padding-right padding-bottom padding-left margin margin-top margin-right margin-bottom margin-left width min-width max-width height min-height max-height table-layout display float clear box-sizing list-style-type list-style-position direction unicode-bidi opacity".split(separator: " ").map(String.init))
     private struct Rule { let selector: String; let css: String; let specificity: Int; let order: Int }
 
     static func sanitize(_ input: String) -> String? { sanitize(input, baseURL: nil) }
@@ -191,8 +191,8 @@ enum SignatureHTML {
         }
         return output.joined(separator: ";")
     }
-    private static func safeCSSValue(_ value: String) -> Bool {
-        let allowedFunctions: Set<String> = ["rgb", "rgba", "hsl", "hsla", "calc", "min", "max", "clamp"]
+    static func safeCSSValue(_ value: String) -> Bool {
+        let allowedFunctions: Set<String> = ["rgb", "rgba", "hsl", "hsla", "calc", "min", "max", "clamp", "linear-gradient", "radial-gradient"]
         var quote: Character?, depth = 0, word = ""
         for c in value {
             if c == "\\" || c == "@" || c == "{" || c == "}" || c == "<" || c == ">" || c == ":" || c.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) && !CharacterSet.whitespacesAndNewlines.contains($0) }) { return false }
@@ -201,7 +201,7 @@ enum SignatureHTML {
             if c == "(" { guard allowedFunctions.contains(word.lowercased()), depth < 8 else { return false }; depth += 1; word = "" }
             else if c == ")" { depth -= 1; if depth < 0 { return false }; word = "" }
             else if c.isLetter || c == "-" { word.append(c) }
-            else if !c.isWhitespace { word = "" }
+            else { word = "" }
         }
         return quote == nil && depth == 0
     }

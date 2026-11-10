@@ -24,10 +24,14 @@ struct OutboxItem: Codable, Identifiable, Sendable {
     var inReplyTo: String? = nil
     var referencesHeader: String? = nil
     var sentMessageID: String? = nil
+    var sentAt: Date? = nil
+    var sentRemoteID: String? = nil
+    var sentOrigin: URL? = nil
     var forwardOf: MailMessage? = nil
     var archiveAfterSend: MailMessage? = nil
     var forwardAttachmentIDs: [String] = []
     var receipt: Bool = false
+    var trackingEnabled: Bool? = nil
     var priority: Int = 3
     var scheduledAt: Date? = nil
     var createdAt: Date = Date()

@@ -20,8 +20,17 @@ struct ReaderPane: View {
     @State private var imageDiagnosticReport: String?
     @State private var imageDiagnosticBusy = false
     @State private var expandQuotedHistory = false
-    @State private var attachmentProgress: String?
-    @State private var savingAttachments = false
+
+    @State private var memoKey: String = ""
+    @State private var memoProjection: MailHistoryProjection.Result = .init(html: "", folded: false)
+    @State private var memoRenderedHTML: String = ""
+    @State private var memoSessionSources: [String] = []
+    @State private var memoHasRemote: Bool = false
+    @State private var memoPlainText: String = ""
+
+    private func bodyRenderKey(_ detail: MailDetail) -> String {
+        "\(detail.message.key):\(expandQuotedHistory):\(showRemoteImages):\(state.preferences.value.loadRemoteImages):\(isDark):\(paperBody)"
+    }
 
     private var message: MailMessage? {
         guard let key = state.activeKey else { return nil }
@@ -83,7 +92,7 @@ struct ReaderPane: View {
             Button("关闭", role: .cancel) { imageDiagnosticReport = nil }
         } message: { Text(imageDiagnosticReport ?? "") }
         .onChange(of: state.activeKey) { _, _ in
-            expandQuotedHistory = false; attachmentProgress = nil
+            expandQuotedHistory = false
             bodyHeight = 60
             bodyWebView = nil
             showRemoteImages = false
@@ -107,6 +116,33 @@ struct ReaderPane: View {
             DividerLine()
             readerScrollView(message, detail: detail)
         }
+        .task(id: detail.map(bodyRenderKey) ?? "") {
+            guard let detail else { return }
+            let key = bodyRenderKey(detail)
+            let shouldExpand = expandQuotedHistory
+            let images = showRemoteImages || state.preferences.value.loadRemoteImages
+            let dark = isDark && !paperBody
+            let paper = isDark && paperBody
+            let worker = Task.detached(priority: .userInitiated) { () -> (MailHistoryProjection.Result, String, [String], Bool, String) in
+                let projection = MailHistoryProjection.summary(detail.html)
+                let displayed = shouldExpand ? detail.html : projection.html
+                let rendered = MailHTML.document(displayed, inline: detail.inline,
+                                                 images: images, dark: dark, paper: paper)
+                let sources = MailImageDiagnostics.providerSessionSources(detail)
+                let remote = detail.html.range(of: "(?:src|background)\\s*=\\s*['\"]?https?://",
+                                               options: [.regularExpression, .caseInsensitive]) != nil
+                let plain = MailHTML.plainText(displayed)
+                return (projection, rendered, sources, remote, plain)
+            }
+            let result = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
+            guard !Task.isCancelled else { return }
+            memoKey = key
+            memoProjection = result.0
+            memoRenderedHTML = result.1
+            memoSessionSources = result.2
+            memoHasRemote = result.3
+            memoPlainText = result.4
+        }
     }
 
     private func readerScrollView(_ message: MailMessage, detail: MailDetail?) -> some View {
@@ -122,6 +158,8 @@ struct ReaderPane: View {
                 subjectBlock(message, detail: detail)
                 VStack(alignment: .leading, spacing: 12) {
                     header(message, detail: detail)
+                    MailSentStatusBanner(state: state, message: message)
+                    MailTrackingReaderStatus(controller: state.tracking, message: message)
                     if showRecipients, let detail {
                         recipientCard(detail, message: message)
                     }
@@ -131,48 +169,51 @@ struct ReaderPane: View {
                         externalBanner(detail?.from ?? message.sender)
                     }
                     if let detail, !detail.visibleAttachments.isEmpty {
-                        attachments(detail.visibleAttachments)
+                        MailAttachmentSection(files: detail.visibleAttachments, message: message, state: state)
+                            .id(message.key)
                     }
                     if let detail {
-                        let projection = MailHistoryProjection.summary(detail.html)
-                        let displayedHTML = expandQuotedHistory ? detail.html : projection.html
-                        if hasRemoteImages(detail.html) && !showRemoteImages && !state.preferences.value.loadRemoteImages {
+                        let ready = memoKey == bodyRenderKey(detail)
+                        if ready && memoHasRemote && !showRemoteImages && !state.preferences.value.loadRemoteImages {
                             remoteBanner
                         }
-                        VStack(alignment: .leading, spacing: 0) {
-                            if plainText {
-                                Text(MailHTML.plainText(displayedHTML))
-                                    .font(.system(size: 13.5))
-                                    .lineSpacing(5)
-                                    .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.vertical, 4)
-                            } else {
-                                MailBodyView(html: MailHTML.document(displayedHTML, inline: detail.inline,
-                                                                     images: showRemoteImages || state.preferences.value.loadRemoteImages,
-                                                                     dark: isDark && !paperBody,
-                                                                     paper: isDark && paperBody),
-                                             inline: detail.inline, message: message, state: state,
-                                             detailHTML: detail.html,
-                                             allowRemote: showRemoteImages || state.preferences.value.loadRemoteImages,
-                                             dark: isDark && !paperBody,
-                                             paper: isDark && paperBody,
-                                             sessionImageSources: MailImageDiagnostics.providerSessionSources(detail),
-                                             height: $bodyHeight, webView: $bodyWebView)
-                                    .frame(height: max(60, bodyHeight))
+                        if ready {
+                            VStack(alignment: .leading, spacing: 0) {
+                                if plainText {
+                                    Text(memoPlainText)
+                                        .font(.system(size: 13.5))
+                                        .lineSpacing(5)
+                                        .textSelection(.enabled)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.vertical, 4)
+                                } else {
+                                    MailBodyView(html: memoRenderedHTML,
+                                                 inline: detail.inline, message: message, state: state,
+                                                 detailHTML: detail.html,
+                                                 allowRemote: showRemoteImages || state.preferences.value.loadRemoteImages,
+                                                 dark: isDark && !paperBody,
+                                                 paper: isDark && paperBody,
+                                                 sessionImageSources: memoSessionSources,
+                                                 height: $bodyHeight, webView: $bodyWebView)
+                                        .frame(height: max(60, bodyHeight))
+                                }
                             }
+                            .accessibilityElement(children: .contain)
+                            .accessibilityIdentifier("reader.messageBody")
+                        } else {
+                                ProgressView("正在整理邮件正文…")
+                                    .font(.system(size: 11))
+                                    .frame(maxWidth: .infinity, minHeight: 80)
                         }
-                        .accessibilityElement(children: .contain)
-                        .accessibilityIdentifier("reader.messageBody")
-                        if projection.folded {
-                            Button {
-                                expandQuotedHistory.toggle()
-                            } label: {
-                                Label(expandQuotedHistory ? "收起引用原文" : "展开引用原文", systemImage: expandQuotedHistory ? "chevron.up" : "ellipsis.bubble")
-                            }
-                            .buttonStyle(.plain).font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(Palette.accent).padding(.vertical, 5)
-                            .accessibilityIdentifier("reader.quotedHistory")
+                        if ready && memoProjection.folded {
+                                Button {
+                                    expandQuotedHistory.toggle()
+                                } label: {
+                                    Label(expandQuotedHistory ? "收起引用原文" : "展开引用原文", systemImage: expandQuotedHistory ? "chevron.up" : "ellipsis.bubble")
+                                }
+                                .buttonStyle(.plain).font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(Palette.accent).padding(.vertical, 5)
+                                .accessibilityIdentifier("reader.quotedHistory")
                         }
                     } else {
                         bodySkeleton
@@ -468,6 +509,7 @@ struct ReaderPane: View {
                 .menuStyle(.borderlessButton).menuIndicator(.hidden)
                 .help(sender)
                 .accessibilityLabel("发件人：\(sender)")
+                if let detail { MailSourceIPBadge(source: detail.sourceIP) }
                 Button {
                     withAnimation(.easeOut(duration: 0.16)) { showRecipients.toggle() }
                 } label: {
@@ -491,9 +533,33 @@ struct ReaderPane: View {
         }
         .accessibilityElement(children: .contain)
         .overlay(alignment: .topTrailing) {
-            Text(message.date.mailRelative).font(.system(size: 10.5)).foregroundStyle(Palette.secondaryText)
-                .padding(.leading, 8).help(message.date.mailFull)
-                .accessibilityLabel(message.date.mailFull)
+            HStack(spacing: 6) {
+                if message.replied {
+                    HStack(spacing: 3) {
+                        Image(systemName: "arrowshape.turn.up.left.fill")
+                            .font(.system(size: 8.5))
+                        Text("已回复")
+                            .font(.system(size: 9.5, weight: .medium))
+                    }
+                    .foregroundStyle(Palette.accent)
+                    .padding(.horizontal, 5).padding(.vertical, 1.5)
+                    .background(Capsule().fill(Palette.accent.opacity(0.12)))
+                }
+                if message.forwarded {
+                    HStack(spacing: 3) {
+                        Image(systemName: "arrowshape.turn.up.right.fill")
+                            .font(.system(size: 8.5))
+                        Text("已转发")
+                            .font(.system(size: 9.5, weight: .medium))
+                    }
+                    .foregroundStyle(Palette.secondaryText)
+                    .padding(.horizontal, 5).padding(.vertical, 1.5)
+                    .background(Capsule().fill(Color.primary.opacity(0.06)))
+                }
+                Text(message.date.mailRelative).font(.system(size: 10.5)).foregroundStyle(Palette.secondaryText)
+                    .padding(.leading, 4).help(message.date.mailFull)
+                    .accessibilityLabel(message.date.mailFull)
+            }
         }
         .accessibilityIdentifier("reader.header")
     }
@@ -511,89 +577,6 @@ struct ReaderPane: View {
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(Capsule().fill(Palette.label(label.color).opacity(0.1)))
             }
-        }
-    }
-
-    private func attachmentRow(_ file: MailAttachment) -> some View {
-        HStack(spacing: 8) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Palette.accent.opacity(0.12))
-                    .frame(width: 28, height: 28)
-                Image(systemName: iconName(for: file.name))
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Palette.accent)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(file.name)
-                    .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(Color.primary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Text(ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file))
-                    .font(.system(size: 10))
-                    .foregroundStyle(Palette.tertiaryText)
-            }
-            Spacer(minLength: 6)
-            Button { save(file) } label: {
-                Image(systemName: "arrow.down.to.line")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Palette.secondaryText)
-            }
-            .buttonStyle(.plain)
-            .help("保存附件")
-            .accessibilityLabel("保存附件：\(file.name)")
-
-            Menu {
-                Button("预览") { preview(file) }
-                Button("用默认应用打开") { openExternally(file) }
-                Button("存储…") { save(file) }
-                Button("共享…") { share(file) }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Palette.secondaryText)
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-        }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.85))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(Palette.hairline, lineWidth: 0.75)
-        )
-        .contentShape(Rectangle())
-        .onTapGesture { preview(file) }
-    }
-
-    private func attachments(_ files: [MailAttachment]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Text("附件").font(.system(size: 10.5, weight: .semibold)).foregroundStyle(Palette.tertiaryText)
-                Chip(text: "\(files.count)", tint: Palette.accent)
-                let totalBytes = files.reduce(0) { $0 + $1.size }
-                Text(ByteCountFormatter.string(fromByteCount: Int64(totalBytes), countStyle: .file))
-                    .font(.system(size: 10)).foregroundStyle(Palette.tertiaryText)
-                Spacer()
-                if files.count > 1 {
-                    Button("全部保存…") {
-                        saveAll(files)
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 10.5, weight: .medium))
-                    .foregroundStyle(Palette.accent).disabled(savingAttachments)
-                }
-            }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 190, maximum: 260), spacing: 8)], alignment: .leading, spacing: 8) {
-                ForEach(files, id: \.id) { file in attachmentRow(file) }
-            }
-            if let attachmentProgress { Text(attachmentProgress).font(.system(size: 11)).foregroundStyle(Palette.secondaryText) }
         }
     }
 
@@ -883,31 +866,6 @@ struct ReaderPane: View {
         .help("邮件净化 (Scrub)：批量清理当前发件人在此文件夹的所有历史邮件")
     }
 
-    private func saveAll(_ files: [MailAttachment]) {
-        guard let message, !savingAttachments else { return }
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.canCreateDirectories = true
-        panel.prompt = "保存全部附件到此目录"
-        guard panel.runModal() == .OK, let destination = panel.url else { return }
-        Task { @MainActor in
-            savingAttachments = true
-            defer { savingAttachments = false }
-            var savedCount = 0, failed: [String] = []
-            for (index, file) in files.enumerated() {
-                attachmentProgress = "正在保存附件 \(index + 1)/\(files.count)…"
-                do {
-                    let data = try await state.attachmentData(file, message: message)
-                    _ = try MailAttachmentExport.save(data, name: file.name, directory: destination)
-                    savedCount += 1
-                } catch { failed.append(file.name) }
-            }
-            let outcome = "已保存 \(savedCount)/\(files.count) 个附件" + (failed.isEmpty ? "" : "；失败：" + failed.prefix(3).joined(separator: "、"))
-            attachmentProgress = outcome; state.status = outcome
-        }
-    }
-
     private var isDark: Bool { colorScheme == .dark }
 
     private func labels(for message: MailMessage) -> [MailLabel] {
@@ -937,68 +895,6 @@ struct ReaderPane: View {
 
     private func hasRemoteImages(_ html: String) -> Bool {
         html.range(of: "(?:src|background)\\s*=\\s*['\"]?https?://", options: [.regularExpression, .caseInsensitive]) != nil
-    }
-
-    private func iconName(for name: String) -> String {
-        switch (name as NSString).pathExtension.lowercased() {
-        case "pdf": return "doc.richtext"
-        case "png", "jpg", "jpeg", "gif", "heic", "webp": return "photo"
-        case "zip", "rar", "7z", "gz": return "archivebox"
-        case "doc", "docx": return "doc.text"
-        case "xls", "xlsx", "csv": return "tablecells"
-        case "ppt", "pptx": return "rectangle.on.rectangle"
-        default: return "paperclip"
-        }
-    }
-
-    private func preview(_ file: MailAttachment) {
-        guard let message else { return }
-        Task { @MainActor in
-            do {
-                let data = try await state.attachmentData(file, message: message)
-                try AttachmentPreviewer.shared.present(name: file.name, data: data)
-            } catch { state.status = "附件读取失败，请检查会话后重试" }
-        }
-    }
-
-    private func save(_ file: MailAttachment) {
-        guard let message else { return }
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = file.name
-        panel.canCreateDirectories = true
-        guard panel.runModal() == .OK, let destination = panel.url else { return }
-        Task { @MainActor in
-            do {
-                let data = try await state.attachmentData(file, message: message)
-                try data.write(to: destination, options: .atomic)
-                let quarantine = "0001;\(String(Int(Date().timeIntervalSince1970), radix: 16));Mail Lite;\(UUID().uuidString)"
-                _ = quarantine.withCString { setxattr(destination.path, "com.apple.quarantine", $0, strlen($0), 0, 0) }
-                state.status = "附件已保存到 \(destination.lastPathComponent)"
-            } catch { state.status = "附件保存失败" }
-        }
-    }
-
-    private func openExternally(_ file: MailAttachment) {
-        guard let message else { return }
-        Task { @MainActor in
-            do {
-                let data = try await state.attachmentData(file, message: message)
-                let url = try AttachmentPreviewer.shared.temporaryFile(name: file.name, data: data)
-                NSWorkspace.shared.open(url)
-            } catch { state.status = "附件打开失败" }
-        }
-    }
-
-    private func share(_ file: MailAttachment) {
-        guard let message else { return }
-        Task { @MainActor in
-            do {
-                let data = try await state.attachmentData(file, message: message)
-                let url = try AttachmentPreviewer.shared.temporaryFile(name: file.name, data: data)
-                guard let view = NSApp.keyWindow?.contentView else { return }
-                NSSharingServicePicker(items: [url]).show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
-            } catch { state.status = "附件共享失败" }
-        }
     }
 
     private func printMessage() {
@@ -1087,7 +983,7 @@ struct MailBodyView: NSViewRepresentable {
     @Binding var height: CGFloat
     @Binding var webView: WKWebView?
 
-    final class Coordinator: NSObject, WKNavigationDelegate, WKURLSchemeHandler {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKURLSchemeHandler {
         var parent: MailBodyView
         var tasks: [ObjectIdentifier: Task<Void, Never>] = [:]
         var lastHTML = ""
@@ -1145,7 +1041,8 @@ struct MailBodyView: NSViewRepresentable {
             measurementTicket += 1
             documentReady = false
             measureWork?.cancel()
-            activeNavigation = view.loadHTMLString(html, baseURL: nil)
+            let displayHTML = MailTrackingHTML.withoutOwnedPixels(html, records: parent.state.tracking.records)
+            activeNavigation = view.loadHTMLString(displayHTML, baseURL: nil)
         }
 
         /// Fills trusted provider-hosted images that need the account web session.
@@ -1187,6 +1084,23 @@ struct MailBodyView: NSViewRepresentable {
             load(expanded, into: view)
         }
 
+        func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+            guard !invalidated, navigation === activeNavigation else { return }
+            documentReady = true
+            if let emailView = webView as? EmailBodyWKWebView {
+                emailView.disableInternalScrollers(in: emailView)
+            }
+            let revision = documentRevision
+            // Measure as soon as HTML DOM commits without waiting for slow/hanging external images
+            for delay in [0.03, 0.1, 0.35] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak webView] in
+                    guard let self, let webView, !self.invalidated,
+                          self.documentRevision == revision else { return }
+                    self.measure(webView)
+                }
+            }
+        }
+
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             guard !invalidated, navigation === activeNavigation else { return }
             documentReady = true
@@ -1206,6 +1120,18 @@ struct MailBodyView: NSViewRepresentable {
             }
         }
 
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            guard !invalidated, navigation === activeNavigation else { return }
+            documentReady = true
+            measure(webView)
+        }
+
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            guard !invalidated, navigation === activeNavigation else { return }
+            documentReady = true
+            measure(webView)
+        }
+
         func measure(_ webView: WKWebView) {
             guard documentReady, !invalidated else { return }
             measureWork?.cancel()
@@ -1220,7 +1146,7 @@ struct MailBodyView: NSViewRepresentable {
                           let fitted = MailBodyLayout.fittedHeight(number) else { return }
                     Task { @MainActor [weak self] in
                         guard let self, !self.invalidated, self.documentReady,
-                              self.measurementTicket == ticket, self.documentRevision == revision else { return }
+                              self.documentRevision == revision else { return }
                         if abs(fitted - self.parent.height) > 0.5 {
                             self.parent.height = fitted
                         }
@@ -1248,14 +1174,23 @@ struct MailBodyView: NSViewRepresentable {
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                      decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            // Programmatic documents (about:blank + HTML string) are allowed.
-            if navigationAction.navigationType != .linkActivated {
+            guard let url = navigationAction.request.url,
+                  url.absoluteString != "about:blank",
+                  !url.absoluteString.isEmpty else {
                 decisionHandler(.allow); return
             }
-            if let url = navigationAction.request.url, Trust.outside(url) {
+            if Trust.outside(url) {
                 NSWorkspace.shared.open(url)
             }
             decisionHandler(.cancel)
+        }
+
+        func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+                     for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+            if let url = navigationAction.request.url, Trust.outside(url) {
+                NSWorkspace.shared.open(url)
+            }
+            return nil
         }
     }
 
@@ -1268,6 +1203,7 @@ struct MailBodyView: NSViewRepresentable {
         configuration.setURLSchemeHandler(context.coordinator, forURLScheme: "mail-inline")
         let view = EmailBodyWKWebView(frame: .zero, configuration: configuration)
         view.navigationDelegate = context.coordinator
+        view.uiDelegate = context.coordinator
         view.underPageBackgroundColor = .clear
         view.setValue(false, forKey: "drawsBackground")
         view.setAccessibilityLabel("邮件正文")
@@ -1284,6 +1220,7 @@ struct MailBodyView: NSViewRepresentable {
     static func dismantleNSView(_ view: WKWebView, coordinator: Coordinator) {
         coordinator.invalidate()
         (view as? EmailBodyWKWebView)?.onContentWidthChanged = nil
+        view.uiDelegate = nil
         view.navigationDelegate = nil
         view.stopLoading()
     }
@@ -1296,6 +1233,8 @@ struct MailBodyView: NSViewRepresentable {
         if context.coordinator.lastHTML != html {
             context.coordinator.lastHTML = html
             context.coordinator.load(html, into: view)
+        } else if height <= 60 {
+            context.coordinator.measure(view)
         }
         if context.coordinator.sessionCurrentKey != sessionImageKey {
             context.coordinator.sessionCurrentKey = sessionImageKey
@@ -1442,6 +1381,14 @@ struct ThreadMessageCard: View {
     @State private var showRemoteImages = false
     @Environment(\.colorScheme) private var colorScheme
 
+    @State private var memoKey: String = ""
+    @State private var memoRenderedHTML: String = ""
+    @State private var memoSessionSources: [String] = []
+
+    private func bodyRenderKey(_ detail: MailDetail) -> String {
+        "\(detail.message.key):\(showRemoteImages):\(state.preferences.value.loadRemoteImages):\(isDark)"
+    }
+
     private var isDark: Bool { colorScheme == .dark }
     private var detail: MailDetail? { state.threadDetails[member.key] ?? (isCurrent ? state.detail : nil) }
 
@@ -1492,22 +1439,28 @@ struct ThreadMessageCard: View {
             if isExpanded {
                 DividerLine()
                 VStack(alignment: .leading, spacing: 10) {
+                    MailSentStatusBanner(state: state, message: member)
                     if let detail {
+                        MailSourceIPBadge(source: detail.sourceIP)
                         if !detail.visibleAttachments.isEmpty {
-                            threadAttachmentBar(detail.visibleAttachments)
+                            MailAttachmentSection(files: detail.visibleAttachments, message: member, state: state)
+                                .id(member.key)
                         }
-                        MailBodyView(html: MailHTML.document(detail.html, inline: detail.inline,
-                                                             images: showRemoteImages || state.preferences.value.loadRemoteImages,
-                                                             dark: isDark,
-                                                             paper: false),
-                                     inline: detail.inline, message: member, state: state,
-                                     detailHTML: detail.html,
-                                     allowRemote: showRemoteImages || state.preferences.value.loadRemoteImages,
-                                     dark: isDark,
-                                     paper: false,
-                                     sessionImageSources: MailImageDiagnostics.providerSessionSources(detail),
-                                     height: $bodyHeight, webView: $webView)
-                            .frame(height: max(50, bodyHeight))
+                        if memoKey == bodyRenderKey(detail) {
+                            MailBodyView(html: memoRenderedHTML,
+                                         inline: detail.inline, message: member, state: state,
+                                         detailHTML: detail.html,
+                                         allowRemote: showRemoteImages || state.preferences.value.loadRemoteImages,
+                                         dark: isDark,
+                                         paper: false,
+                                         sessionImageSources: memoSessionSources,
+                                         height: $bodyHeight, webView: $webView)
+                                .frame(height: max(50, bodyHeight))
+                        } else {
+                            ProgressView("正在整理邮件正文…")
+                                .font(.system(size: 11))
+                                .frame(maxWidth: .infinity, minHeight: 60)
+                        }
                         HStack(spacing: 8) {
                             Button {
                                 state.composeReply(detail, mode: .reply)
@@ -1536,9 +1489,6 @@ struct ThreadMessageCard: View {
                             Text("正在读取来往邮件正文…").font(.system(size: 11)).foregroundStyle(Palette.secondaryText)
                         }
                         .padding(.vertical, 10)
-                        .task {
-                            _ = await state.loadDetail(member)
-                        }
                     }
                 }
                 .padding(.horizontal, 14).padding(.vertical, 10)
@@ -1548,23 +1498,25 @@ struct ThreadMessageCard: View {
             outgoing: conversationIsOutgoing(member, detail: detail, state: state),
             current: isCurrent
         ))
-        .task {
-            if isExpanded && detail == nil {
+        .task(id: isExpanded ? (detail.map(bodyRenderKey) ?? "loading") : "") {
+            guard isExpanded else { return }
+            if let detail {
+                let key = bodyRenderKey(detail)
+                let images = showRemoteImages || state.preferences.value.loadRemoteImages
+                let dark = isDark
+                let worker = Task.detached(priority: .userInitiated) {
+                    (MailHTML.document(detail.html, inline: detail.inline, images: images, dark: dark),
+                     MailImageDiagnostics.providerSessionSources(detail))
+                }
+                let result = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
+                guard !Task.isCancelled else { return }
+                memoKey = key
+                memoRenderedHTML = result.0
+                memoSessionSources = result.1
+            } else {
                 _ = await state.loadDetail(member)
             }
         }
-    }
-
-    @ViewBuilder
-    private func threadAttachmentBar(_ files: [MailAttachment]) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "paperclip").font(.system(size: 10)).foregroundStyle(Palette.accent)
-            Text("\(files.count) 个附件").font(.system(size: 10.5, weight: .medium)).foregroundStyle(Palette.secondaryText)
-            ForEach(files.prefix(3), id: \.id) { file in
-                Text(file.name).font(.system(size: 10)).foregroundStyle(Palette.tertiaryText).lineLimit(1)
-            }
-        }
-        .padding(.vertical, 2)
     }
 
     private func displayName(_ raw: String) -> String {

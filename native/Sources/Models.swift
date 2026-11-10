@@ -84,8 +84,17 @@ struct MailMessage: Codable, Sendable {
     var snoozedUntil: Date? = nil
     var labels: [String]? = nil
     var fromAddress: String? = nil
+    var status2: String? = nil
     var key: String { "\(accountID):\(remoteID):\(folderID):\(id)" }
     var hasFlag: Bool { !["0","flag_not_set",""].contains(flag ?? "") }
+    var replied: Bool {
+        if let status2, ["1", "3"].contains(status2) { return true }
+        return false
+    }
+    var forwarded: Bool {
+        if let status2, ["2", "3"].contains(status2) { return true }
+        return false
+    }
     static func conversations(_ messages:[MailMessage])->[MailMessage] {
         let sorted=messages.sorted{$0.date == $1.date ? $0.key<$1.key : $0.date>$1.date}
         var rows:[MailMessage]=[],positions:[String:Int]=[:],counts:[String:Int]=[:]
@@ -94,9 +103,18 @@ struct MailMessage: Codable, Sendable {
             counts[key,default:0]+=1
             if let index=positions[key] {
                 rows[index].unread = rows[index].unread || message.unread
-                rows[index].threadCount=max(rows[index].threadCount ?? 1,max(counts[key] ?? 1,message.threadCount ?? 1))
+                let replied = rows[index].replied || message.replied
+                let forwarded = rows[index].forwarded || message.forwarded
+                if replied || forwarded { rows[index].status2 = replied && forwarded ? "3" : replied ? "1" : "2" }
             } else {positions[key]=rows.count;rows.append(message)}
-        };return rows
+        }
+        for (key, index) in positions {
+            let localCount = counts[key] ?? 1
+            let serverCount = rows[index].threadCount ?? 1
+            let total = max(localCount, serverCount)
+            rows[index].threadCount = total > 1 ? total : nil
+        }
+        return rows
     }
     static func parse(_ row: [String: Any], accountID: String, remoteID: String, folderID: String, origin: URL) -> MailMessage? {
         guard Trust.mail(origin), let id = Trust.numericID(row["messageId"]), Trust.numericID(remoteID) != nil, Trust.numericID(folderID) != nil else { return nil }
@@ -114,7 +132,11 @@ struct MailMessage: Codable, Sendable {
             message.fromAddress = addresses[0]
         }
         if let id=Trust.numericID(row["threadId"]),id != "0" {message.threadID=id}
-        message.threadCount=Int(String(describing:row["threadCount"] ?? "0"))
+        let count = Int(String(describing: row["threadCount"] ?? "0")) ?? 0
+        message.threadCount = count > 0 ? count : nil
+        if let st2 = row["status2"] ?? row["status_2"] {
+            message.status2 = String(describing: st2)
+        }
         message.flag=Trust.text(String(describing:row["flagid"] ?? "flag_not_set"),limit:40)
         message.archived=["true","1"].contains(String(describing:row["isArchived"] ?? "false").lowercased())
         message.pinned=["true","1"].contains(String(describing:row["isPinned"] ?? row["pinned"] ?? "false").lowercased())

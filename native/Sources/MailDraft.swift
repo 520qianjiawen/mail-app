@@ -17,6 +17,7 @@ struct MailDraft:Codable,Sendable {
     var obsoleteCloudIDs:[String]?=nil
     var excludedForwardIDs:[String]?=nil
     var receipt=false
+    var trackingEnabled:Bool?=nil
     var scheduleType:Int?=nil
     var priority:Int?=nil
     var managedSignature:SignatureDraftSegment?=nil

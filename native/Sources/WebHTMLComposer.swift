@@ -10,7 +10,7 @@ struct HTMLSignatureDraftState: Codable, Sendable, Equatable {
     var baseline: String
 }
 
-struct WebHTMLSnapshot {
+struct WebHTMLSnapshot: Sendable {
     var html: String
     var outgoingHTML: String
     var text: String
@@ -84,14 +84,18 @@ private final class ComposerImageTransport: NSObject, WKURLSchemeHandler, URLSes
     private var disposed = false
     private(set) var webView: WKWebView!
     private var ready = false
+    private var replyPreparationTask: Task<Void, Never>?
+    private var replyPreparationGeneration = 0
     private var readyWaiters: [CheckedContinuation<Void, Never>] = []
     private var tail: Task<Void, Never>?
     private var cached = WebHTMLSnapshot(html: "", outgoingHTML: "", text: "", signature: nil)
     var onChange: (() -> Void)?
     var onPasteError: ((String) -> Void)?
+    var onReplyPreparationChange: ((Bool) -> Void)?
     private var editingEnabled = true
     var onSelection: ((String, CGFloat) -> Void)?
     private(set) var failure: String?
+    private(set) var isPreparingReply = false
     var allowsRemoteImages = false { didSet { updateImagePolicy() } }
     var allowsSignatureImages = true { didSet { updateImagePolicy() } }
     private func updateImagePolicy() { commandScript("window.ml.images(\(allowsRemoteImages), \(allowsSignatureImages));") }
@@ -130,11 +134,17 @@ private final class ComposerImageTransport: NSObject, WKURLSchemeHandler, URLSes
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { fail("HTML 编辑进程已退出，请重新打开草稿") }
     func dispose() {
         guard !disposed else { return }; disposed = true
+        replyPreparationGeneration &+= 1
+        replyPreparationTask?.cancel()
+        replyPreparationTask = nil
+        isPreparingReply = false
+        onReplyPreparationChange?(false)
         fail("HTML 编辑器已关闭")
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "changed", contentWorld: world)
         webView.configuration.userContentController.removeAllUserScripts()
         webView.navigationDelegate = nil; webView.stopLoading(); imageTransport.shutdown()
-        onChange = nil; onSelection = nil; onPasteError = nil; (webView as? ComposerPasteWebView)?.onImagePaste = nil; messageRelay.target = nil
+        onChange = nil; onSelection = nil; onPasteError = nil; onReplyPreparationChange = nil
+        (webView as? ComposerPasteWebView)?.onImagePaste = nil; messageRelay.target = nil
     }
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         decisionHandler(action.navigationType == .other && !ready && action.request.url?.absoluteString == "about:blank" ? .allow : .cancel)
@@ -167,7 +177,11 @@ private final class ComposerImageTransport: NSObject, WKURLSchemeHandler, URLSes
     }
     @discardableResult private func queued(_ operation: @escaping @MainActor () async -> Void) -> Task<Void, Never> {
         let preceding = tail
-        let task = Task { @MainActor in await preceding?.value; await operation() }
+        let task = Task { @MainActor in
+            await preceding?.value
+            await replyPreparationTask?.value
+            await operation()
+        }
         tail = task; return task
     }
     private static func json(_ value: String) -> String { String(data: try! JSONEncoder().encode(value), encoding: .utf8)! }
@@ -223,13 +237,54 @@ private final class ComposerImageTransport: NSObject, WKURLSchemeHandler, URLSes
     }
     /// Initial reply construction supplies a structural quote boundary, not a text heuristic.
     func loadReplyHTML(body: String, quote: String) {
-        guard let cleanBody = SignatureHTML.sanitizeBody(body), let cleanQuote = SignatureHTML.sanitizeBody(quote) else {
+        guard let snapshot = Self.replySnapshot(body: body, quote: quote) else {
             fail("原邮件内容过大或格式无法保留，请保留原文后重试"); return
         }
+        applyReplySnapshot(snapshot)
+    }
+    func loadReplyHTMLInBackground(body: String, quote: String) {
+        prepareReplyInBackground {
+            Self.replySnapshot(body: body, quote: quote)
+        }
+    }
+    func loadReplyForMessageInBackground(body: String, source: MailDetail) {
+        prepareReplyInBackground {
+            let bodyHTML = "<div style=\"font:12pt Verdana,Arial,sans-serif;color:#000\">" +
+                MailHTML.escape(body).replacingOccurrences(of: "\n", with: "<br>") + "<br></div>"
+            return Self.replySnapshot(body: bodyHTML, quote: ComposeDocument.webQuote(source: source))
+        }
+    }
+    private func prepareReplyInBackground(_ prepare: @escaping @Sendable () -> WebHTMLSnapshot?) {
+        replyPreparationGeneration &+= 1
+        let generation = replyPreparationGeneration
+        isPreparingReply = true
+        onReplyPreparationChange?(true)
+        replyPreparationTask?.cancel()
+        replyPreparationTask = Task { @MainActor [weak self] in
+            let snapshot = await Task.detached(priority: .userInitiated, operation: prepare).value
+            guard let self, !self.disposed, self.replyPreparationGeneration == generation else { return }
+            guard let snapshot else {
+                self.isPreparingReply = false
+                self.onReplyPreparationChange?(false)
+                self.fail("原邮件内容过大或格式无法保留，请保留原文后重试")
+                return
+            }
+            self.cached = snapshot
+            _ = await self.evaluate("window.ml.load(\(Self.json(snapshot.html)), null, true);")
+            self.isPreparingReply = false
+            self.onReplyPreparationChange?(false)
+        }
+    }
+    nonisolated private static func replySnapshot(body: String, quote: String) -> WebHTMLSnapshot? {
+        guard let cleanBody = SignatureHTML.sanitizeBody(body), let cleanQuote = SignatureHTML.sanitizeBody(quote) else { return nil }
         let html = cleanBody + "<div data-ml-quote=\"true\">" + cleanQuote + "</div>"
-        guard html.utf8.count <= MailBodyPolicy.maximumBytes else { fail("回复原文超过本机处理容量（64 MB），原邮件仍保留"); return }
-        cached = WebHTMLSnapshot(html: html, outgoingHTML: cleanBody + "<div>" + cleanQuote + "</div>", text: MailHTML.plainText(html), signature: nil)
-        commandScript("window.ml.load(\(Self.json(html)), null, true);")
+        guard html.utf8.count <= MailBodyPolicy.maximumBytes else { return nil }
+        return WebHTMLSnapshot(html: html, outgoingHTML: cleanBody + "<div>" + cleanQuote + "</div>",
+                               text: MailHTML.plainText(html), signature: nil)
+    }
+    private func applyReplySnapshot(_ snapshot: WebHTMLSnapshot) {
+        cached = snapshot
+        commandScript("window.ml.load(\(Self.json(snapshot.html)), null, true);")
     }
     func restoreHTML(_ html: String, signature: HTMLSignatureDraftState?) {
         guard let outgoing = SignatureHTML.sanitizeBody(html) else { fail("草稿正文格式无效或超过本机处理容量（64 MB），原草稿仍保留"); return }
@@ -238,6 +293,7 @@ private final class ComposerImageTransport: NSObject, WKURLSchemeHandler, URLSes
         commandScript("window.ml.load(\(Self.json(html)), \(state), true);")
     }
     func flush() async -> WebHTMLSnapshot {
+        await replyPreparationTask?.value
         let task = queued { [self] in
             guard let value = await evaluate("return window.ml.snapshot();") as? [String: Any],
                   let html = value["html"] as? String, let outgoing = value["outgoingHTML"] as? String else {

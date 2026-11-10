@@ -48,8 +48,11 @@ enum ListFilter: Int, CaseIterable, Identifiable {
     let cache: MailCache
     let draftStore: DraftStore
     let outboxStore: OutboxStore
+    let repliedStore: RepliedMessageStore
     let api = MailAPI()
+    let imageBytes = MailImageByteCache()
     let notifier = Notifier()
+    lazy var tracking = MailTrackingController(directory: preferences.directory, fixture: fixture)
 
     @Published var accounts: [MailAccount]
     @Published var scope = Scope()
@@ -57,6 +60,7 @@ enum ListFilter: Int, CaseIterable, Identifiable {
     @Published var rows: [MailMessage] = []
     @Published var threadRows: [MailMessage] = []
     @Published var selectedKeys: Set<String> = []
+    @Published var selectedDraftIDs: Set<String> = []
     @Published var activeKey: String?
     @Published var detail: MailDetail?
     @Published var threadDetails: [String: MailDetail] = [:]
@@ -92,6 +96,7 @@ enum ListFilter: Int, CaseIterable, Identifiable {
     @Published var selectedLabelFilter: MailLabel?
 
     var sessions: [String: MailboxSession] = [:]
+    let listSourceIPLoader = MailListSourceIPLoader()
     var foldersByAccount: [String: [MailFolder]] = [:]
     var messageStore: [String: MailMessage] = [:]
     var moreByFolder: [String: Bool] = [:]
@@ -180,10 +185,13 @@ enum ListFilter: Int, CaseIterable, Identifiable {
         let mailboxCache = MailCache(directory: prefs.directory)
         let localDrafts = DraftStore(directory: prefs.directory)
         let queue = OutboxStore(directory: prefs.directory.appendingPathComponent("outbox"))
+        let repliedTracker = RepliedMessageStore(directory: prefs.directory)
+        repliedTracker.seedFromOutbox(queue.all())
         mailboxCache.restorePins(prefs.value.offlineSaved)
         cache = mailboxCache
         draftStore = localDrafts
         outboxStore = queue
+        repliedStore = repliedTracker
         outbox = queue.all().filter { !["sent", "cancelled"].contains($0.state) }
         let identifiers = Set(loaded.map { $0.id })
         for item in mailboxCache.contexts(accounts: identifiers) {
@@ -191,7 +199,10 @@ enum ListFilter: Int, CaseIterable, Identifiable {
             foldersByAccount[item.accountID] = item.folders
         }
         if !fixture {
-            for message in mailboxCache.messages(accounts: identifiers) { messageStore[message.key] = message }
+            for var message in mailboxCache.messages(accounts: identifiers) {
+                repliedTracker.applyStatus(to: &message)
+                messageStore[message.key] = message
+            }
         }
         expandedAccounts = Set(loaded.map { $0.id })
         restoreScope()
@@ -230,6 +241,7 @@ enum ListFilter: Int, CaseIterable, Identifiable {
         outboxTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.processOutbox() }
         }
+        tracking.start()
         processOutbox()
         Task { @MainActor in
             if preferences.value.notificationsEnabled {
@@ -253,6 +265,7 @@ enum ListFilter: Int, CaseIterable, Identifiable {
         contextSearchToken = UUID()
         contextSearchTask?.cancel(); contextSearchTask = nil
         primarySenderSync.stop()
+        tracking.stop()
         mailReminderStore.stop()
         for session in accountSessions.values { session.finishLogin(false) }
         started = false
@@ -321,12 +334,31 @@ enum ListFilter: Int, CaseIterable, Identifiable {
                     snapshot = try await syncHooks.fetchInbox(account)
                 } else {
                     let webSession = session(account)
-                    try await webSession.ready()
-                    let context = try await api.discover(account: account, store: webSession.store,
+                    var context: MailboxSession
+                    if let saved = sessions[account.id],
+                       let credential = zohoOAuthAccounts.first(where: { $0.email.caseInsensitiveCompare(saved.email) == .orderedSame }),
+                       try ZohoOAuthKeychain.refreshToken(for: saved.email) != nil {
+                        guard credential.accountID == saved.remoteID, saved.origin.host == "mail.\(credential.region)",
+                              Trust.mail(saved.origin) else { throw MailFailure.auth }
+                        let folderRows = try await ZohoOAuthManager.shared.listRequest(path: "folders", query: [:], credential: credential)
+                        context = saved
+                        context.folders = folderRows.compactMap(MailFolder.parse)
+                    } else {
+                        try await webSession.ready()
+                        context = try await api.discover(account: account, store: webSession.store,
                                                          origin: webSession.origin, browser: webSession.webView)
+                    }
                     guard let inbox = context.inbox else { throw MailFailure.folder }
                     let head = try await api.messages(context: context, folder: inbox, store: webSession.store,
                                                        browser: webSession.webView)
+                    if inbox.unread == nil, try ZohoOAuthKeychain.refreshToken(for: context.email) != nil {
+                        let unread = try await api.messages(context: context, folder: inbox, store: webSession.store,
+                                                            browser: webSession.webView, filter: ListFilter.unread.rawValue)
+                        // Only a complete result establishes an exact count.
+                        if !unread.more, let index = context.folders.firstIndex(where: { $0.id == inbox.id }) {
+                            context.folders[index].unread = unread.messages.filter { $0.unread }.count
+                        }
+                    }
                     snapshot = MailSyncSnapshot(context: context, head: head)
                 }
                 guard acceptsReply(accountID: account.id, lifetime: lifetime, revision: revision), !Task.isCancelled else { continue }
@@ -393,6 +425,7 @@ enum ListFilter: Int, CaseIterable, Identifiable {
         searchText = newScope.kind == .search ? newScope.query : ""
         if newScope.kind != .search { searchResults = [] }
         selectedKeys = []
+        selectedDraftIDs = []
         persistScope()
         refresh()
     }
@@ -536,6 +569,10 @@ enum ListFilter: Int, CaseIterable, Identifiable {
         // here also turns an expired cookie into an immediate auth error
         // instead of a misleading "response" failure on first use.
         if let saved = sessions[account.id] {
+            if zohoOAuthAccounts.contains(where: { $0.email == saved.email }) {
+                guard acceptsReply(accountID: account.id, lifetime: lifetime, revision: revision) else { throw CancellationError() }
+                return saved
+            }
             try await webSession.ready()
             guard acceptsReply(accountID: account.id, lifetime: lifetime, revision: revision) else { throw CancellationError() }
             return saved
@@ -616,11 +653,19 @@ enum ListFilter: Int, CaseIterable, Identifiable {
         let accepted = page.messages.filter { message in
             serial >= messageObservationSerial[message.key, default: 0]
         }
-        for message in accepted {
+        var merged: [MailMessage] = []
+        for var message in accepted {
+            // Apply persistent replied/forwarded status if server returns 0/nil.
+            repliedStore.applyStatus(to: &message)
+            if let existing = messageStore[message.key], let localSt2 = existing.status2,
+               (message.status2 == nil || message.status2 == "0") {
+                message.status2 = localSt2
+            }
             messageStore[message.key] = message
             messageObservationSerial[message.key] = serial
+            merged.append(message)
         }
-        cache.store(accepted, account: account.id, replace: false)
+        cache.store(merged, account: account.id, replace: false)
         if headOnly, let old = viewWindows[query], old.next > page.next {
             // Head polling is not authority to discard an older loaded page.
             // The selected-view refresh separately validates the whole range.
@@ -709,6 +754,9 @@ enum ListFilter: Int, CaseIterable, Identifiable {
         }
         let listFilter = effectiveFilter
         pool = pool.filter { MailSyncPolicy.matches($0, filter: listFilter) }
+        for i in pool.indices {
+            repliedStore.applyStatus(to: &pool[i])
+        }
         var rows = MailMessage.conversations(pool)
         rows.sort { a, b in
             if (a.pinned == true) != (b.pinned == true) { return a.pinned == true }
@@ -743,6 +791,28 @@ enum ListFilter: Int, CaseIterable, Identifiable {
         }
         if !threadRows.contains(where: { $0.key == active.key }) {
             threadRows = [active]
+        }
+    }
+
+    func threadMembers(for message: MailMessage) -> [MailMessage] {
+        guard let threadID = message.threadID else { return [message] }
+        let members = messageStore.values.filter { Self.sameReadingMailbox($0, message) && $0.threadID == threadID }
+        if members.isEmpty { return [message] }
+        return Self.orderedReadingMembers(Array(members))
+    }
+
+    func ensureThreadLoaded(_ message: MailMessage) {
+        guard message.threadID != nil else { return }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let fetched = try await self.fetchReadingThread(message)
+                for member in fetched {
+                    self.messageStore[member.key] = member
+                }
+                self.rebuildThread()
+                self.objectWillChange.send()
+            } catch {}
         }
     }
 
@@ -840,7 +910,12 @@ enum ListFilter: Int, CaseIterable, Identifiable {
         readingRetry = (message, preferLatest)
         activeKey = message.key
         selectedKeys = [message.key]
-        detail = cache.detail(message).flatMap { Self.sameReadingIdentity($0.message, message) ? $0 : nil }
+        if var cachedDetail = cache.detail(message).flatMap({ Self.sameReadingIdentity($0.message, message) ? $0 : nil }) {
+            repliedStore.applyStatus(to: &cachedDetail.message)
+            detail = cachedDetail
+        } else {
+            detail = nil
+        }
         detailLoading = detail == nil
         rebuildThread()
         if preferences.value.markReadOnOpen, message.unread {
@@ -864,9 +939,10 @@ enum ListFilter: Int, CaseIterable, Identifiable {
                 // Even if the representative body fails, discovering the newest
                 // member can still succeed and show its complete headers/body.
                 do {
-                    let loaded = try await self.fetchReadingDetail(message)
+                    var loaded = try await self.fetchReadingDetail(message)
                     guard valid(message) else { return }
                     guard Self.sameReadingIdentity(loaded.message, message) else { throw MailFailure.response }
+                    self.repliedStore.applyStatus(to: &loaded.message)
                     self.cache.store(loaded)
                     self.threadDetails[message.key] = loaded
                     self.detail = loaded
@@ -901,6 +977,33 @@ enum ListFilter: Int, CaseIterable, Identifiable {
                     members[member.key] = member
                 }
                 members[message.key] = self.messageStore[message.key] ?? message
+                let sentFolderID = self.sessions[message.accountID]?.sent?.id
+                let addresses = Set(self.sessions[message.accountID]?.addresses ?? [])
+                let hasSentMember = members.values.contains { m in
+                    (sentFolderID != nil && m.folderID == sentFolderID) ||
+                    (m.fromAddress != nil && addresses.contains(m.fromAddress!))
+                }
+                if hasSentMember {
+                    self.repliedStore.markReplied(key: message.key, id: message.id, threadID: message.threadID)
+                    for (k, var m) in members {
+                        let isSent = (sentFolderID != nil && m.folderID == sentFolderID) || (m.fromAddress != nil && addresses.contains(m.fromAddress!))
+                        if !isSent {
+                            self.repliedStore.markReplied(key: m.key, id: m.id, threadID: m.threadID)
+                            m.status2 = m.forwarded ? "3" : "1"
+                            members[k] = m
+                            self.messageStore[k] = m
+                        }
+                    }
+                    for i in self.rows.indices {
+                        if self.rows[i].key == message.key || (message.threadID != nil && self.rows[i].threadID == message.threadID) {
+                            self.rows[i].status2 = self.rows[i].forwarded ? "3" : "1"
+                        }
+                    }
+                    if var curDetail = self.detail {
+                        self.repliedStore.applyStatus(to: &curDetail.message)
+                        self.detail = curDetail
+                    }
+                }
                 for member in members.values { self.messageStore[member.key] = member }
                 self.threadRows = Self.orderedReadingMembers(Array(members.values))
                 guard preferLatest, let latest = self.threadRows.first, latest.key != message.key else { return }
@@ -913,9 +1016,10 @@ enum ListFilter: Int, CaseIterable, Identifiable {
                 if self.preferences.value.markReadOnOpen, latest.unread {
                     self.perform(.read, on: [latest], quiet: true)
                 }
-                let loaded = try await self.fetchReadingDetail(latest)
+                var loaded = try await self.fetchReadingDetail(latest)
                 guard valid(latest) else { return }
                 guard Self.sameReadingIdentity(loaded.message, latest) else { throw MailFailure.response }
+                self.repliedStore.applyStatus(to: &loaded.message)
                 self.cache.store(loaded)
                 self.threadDetails[latest.key] = loaded
                 self.detail = loaded
@@ -974,10 +1078,13 @@ enum ListFilter: Int, CaseIterable, Identifiable {
         guard let account = accounts.first(where: { $0.id == message.accountID }) else { throw MailFailure.auth }
         // A thread request does not require a catalog revision fence: mark-read
         // acknowledgements do not change its mailbox identity or membership.
-        let web = session(account)
-        try await web.ready()
         guard let context = sessions[account.id], context.accountID == message.accountID,
               context.remoteID == message.remoteID, context.origin == message.origin else { throw MailFailure.response }
+        if let credential = zohoOAuthAccounts.first(where: { $0.email == context.email }) {
+            return try await api.oauthThread(message, context: context, credential: credential)
+        }
+        let web = session(account)
+        try await web.ready()
         var result: [MailMessage] = [], start = 1
         // Read every page before claiming a latest member, independent of server
         // sort direction. Bounded malformed/repeating pagination is visible error.
@@ -996,6 +1103,10 @@ enum ListFilter: Int, CaseIterable, Identifiable {
         if let fetch = syncHooks?.fetchDetail { return try await fetch(message) }
         if fixture { return fixtureDetail(message) }
         guard let account = accounts.first(where: { $0.id == message.accountID }) else { throw MailFailure.auth }
+        if let email = sessions[account.id]?.email,
+           let credential = zohoOAuthAccounts.first(where: { $0.email == email }) {
+            return try await api.oauthDetail(message, credential: credential)
+        }
         let web = session(account)
         try await web.ready()
         return try await api.detail(message, store: web.store, browser: web.webView)
@@ -1004,20 +1115,29 @@ enum ListFilter: Int, CaseIterable, Identifiable {
     func loadDetail(_ message: MailMessage) async -> MailDetail? {
         let lifetime = syncLifetime
         guard acceptsLifetimeReply(accountID: message.accountID, lifetime: lifetime) else { return nil }
-        if let existing = threadDetails[message.key] ?? cache.detail(message),
+        if var existing = threadDetails[message.key] ?? cache.detail(message),
+           existing.sourceIP != nil,
            existing.imageSourceRecovery != nil || !MailOriginalHTML.needsRecovery(existing.html) {
+            repliedStore.applyStatus(to: &existing.message)
             threadDetails[message.key] = existing
             return existing
         }
         do {
-            let loaded = try await fetchReadingDetail(message)
+            var loaded = try await fetchReadingDetail(message)
             try Task.checkCancellation()
             guard acceptsLifetimeReply(accountID: message.accountID, lifetime: lifetime),
                   loaded.message.key == message.key, loaded.message.origin == message.origin else { return nil }
+            repliedStore.applyStatus(to: &loaded.message)
             cache.store(loaded)
             threadDetails[message.key] = loaded
             return loaded
         } catch {
+            // An old offline body is still readable when source-header enrichment fails.
+            if acceptsLifetimeReply(accountID: message.accountID, lifetime: lifetime),
+               var cached = cache.detail(message), Self.sameReadingIdentity(cached.message, message) {
+                repliedStore.applyStatus(to: &cached.message)
+                return cached
+            }
             return nil
         }
     }
@@ -1044,10 +1164,14 @@ enum ListFilter: Int, CaseIterable, Identifiable {
         guard let account = accounts.first(where: { $0.id == message.accountID }) else { throw MailFailure.auth }
         if fixture, let hook = inlineImageDataHook { return try await hook(file, message) }
         if fixture, let data = "Mail Lite fixture attachment".data(using: .utf8) { return data }
-        _ = try await mailbox(account)
-        let session = session(account)
-        try await session.ready()
-        return try await api.attachment(file, message: message, store: session.store, browser: session.webView)
+        let key = "attachment|\(message.key)|\(message.origin)|\(file.id)"
+        return try await imageBytes.data(for: key) { [weak self] in
+            guard let self else { throw MailFailure.auth }
+            _ = try await self.mailbox(account)
+            let session = self.session(account)
+            try await session.ready()
+            return try await self.api.attachment(file, message: message, store: session.store, browser: session.webView)
+        }
     }
 
     /// Session-only provider image bytes. Fixture mode serves the hook so tests
@@ -1060,12 +1184,16 @@ enum ListFilter: Int, CaseIterable, Identifiable {
             guard MailRasterImage.mimeType(for: data) != nil else { throw MailFailure.response }
             return data
         }
-        _ = try await mailbox(account)
-        let session = session(account)
         guard let url = MailInlineImageReference.sessionImageURL(raw, origin: message.origin) else { throw MailFailure.auth }
-        let data = try await api.sessionImage(url, origin: message.origin, store: session.store)
-        guard MailRasterImage.mimeType(for: data) != nil else { throw MailFailure.response }
-        return data
+        let key = "session|\(message.accountID)|\(message.origin)|\(url.absoluteString)"
+        return try await imageBytes.data(for: key) { [weak self] in
+            guard let self else { throw MailFailure.auth }
+            _ = try await self.mailbox(account)
+            let session = self.session(account)
+            let data = try await self.api.sessionImage(url, origin: message.origin, store: session.store)
+            guard MailRasterImage.mimeType(for: data) != nil else { throw MailFailure.response }
+            return data
+        }
     }
 
     // MARK: - Actions
@@ -1109,7 +1237,9 @@ enum ListFilter: Int, CaseIterable, Identifiable {
             } else {
                 let context = try await mailbox(account)
                 let session = self.session(account)
-                try await session.ready()
+                if !zohoOAuthAccounts.contains(where: { $0.email == context.email }) {
+                    try await session.ready()
+                }
                 guard active(), !Task.isCancelled else { return }
                 try await api.perform(action, messages: messages, context: context,
                                       store: session.store, browser: session.webView)
@@ -1442,6 +1572,7 @@ enum ListFilter: Int, CaseIterable, Identifiable {
             mutationRevisions[accountID, default: 0] &+= 1
             mutationQueue.invalidate(accountID: accountID)
             signatureAccountEpoch[accountID, default: 0] &+= 1
+            imageBytes.removeAll()
         }
     }
 
@@ -1647,6 +1778,7 @@ enum ListFilter: Int, CaseIterable, Identifiable {
         var draft = MailDraft(accountID: id, from: from, mode: ComposeMode.new.rawValue, source: nil,
                               to: to, subject: subject, body: body)
         let autoBcc = defaultBcc(for: id, from: from)
+        draft.trackingEnabled = tracking.defaultEnabled
         if !autoBcc.isEmpty { draft.bcc = autoBcc }
         openCompose(draft)
     }
@@ -1658,15 +1790,13 @@ enum ListFilter: Int, CaseIterable, Identifiable {
         // Old caches may have lost Reply-To; resolve the original headers before
         // creating a reply instead of silently addressing the website or ourselves.
         if mode != .forward, !fixture, detail.replyHeadersChecked != true {
-            guard let account = accounts.first(where: { $0.id == detail.message.accountID }) else { return }
+            guard accounts.contains(where: { $0.id == detail.message.accountID }) else { return }
             composeSourcePending.insert(key)
             status = "正在核对回复地址…"
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 do {
-                    let session = self.session(account)
-                    try await session.ready()
-                    let loaded = try await self.api.detail(detail.message, store: session.store, browser: session.webView)
+                    let loaded = try await self.fetchReadingDetail(detail.message)
                     self.cache.store(loaded)
                     self.threadDetails[detail.message.key] = loaded
                     if self.activeKey == detail.message.key { self.detail = loaded }
@@ -1694,6 +1824,7 @@ enum ListFilter: Int, CaseIterable, Identifiable {
         let recipients = MailAddresses.extract(detail.to + "," + detail.cc).map { $0.lowercased() }
         let from = identities.first { recipients.contains($0.lowercased()) } ?? own
         var value = MailDraft(accountID: account.id, from: from, mode: mode.rawValue, source: detail)
+        value.trackingEnabled = tracking.defaultEnabled
         if mode != .forward {
             let addresses = MailAddresses.reply(detail, own: identities, all: mode == .replyAll)
             value.to = addresses.to; value.cc = addresses.cc
@@ -1764,6 +1895,7 @@ enum ListFilter: Int, CaseIterable, Identifiable {
         let autoBcc = defaultBcc(for: detail.message.accountID, from: value.from)
         if !autoBcc.isEmpty { value.bcc = autoBcc }
         value.body = MailHTML.plainText(detail.html)
+        value.trackingEnabled = tracking.defaultEnabled
         openCompose(value)
     }
 
@@ -1866,6 +1998,7 @@ enum ListFilter: Int, CaseIterable, Identifiable {
                                           to: item.to, cc: item.cc, bcc: item.bcc, subject: item.subject,
                                           body: MailHTML.plainText(item.html))
                 recovered.htmlBody = item.html
+                recovered.trackingEnabled = item.trackingEnabled
                 for file in outboxStore.attachments(id) {
                     let name = OutboxStore.attachmentName(file)
                     let temporary = try draftStore.folder(recovered.id).appendingPathComponent("recover-\(UUID().uuidString)", isDirectory: true)
@@ -1934,12 +2067,13 @@ enum ListFilter: Int, CaseIterable, Identifiable {
                 guard outboxStore.update(id, { $0.postStarted = true }) else { throw MailFailure.response }
                 postStarted = true
                 try await hook(item)
-                finishAcknowledgedSend(item)
+                finishAcknowledgedSend(item, context: sessions[item.accountID])
                 return
             }
             // Validate the durable self-contained draft before any network IO.
             // Only a transient copy receives provider-returned inline URLs.
-            let preparedBody = try MailInlineImageSend.prepare(item.html)
+            if item.trackingEnabled == true && !tracking.connected { throw MailTrackingFailure.disconnected }
+            let preparedBody = try MailInlineImageSend.prepare(MailTrackingHTML.withoutOwnedPixels(item.html, records: tracking.records))
             let sendLifetime = contextActionLifetime()
             guard acceptsContextAction(accountID: account.id, lifetime: sendLifetime), !Task.isCancelled else { throw CancellationError() }
             let context = try await mailbox(account)
@@ -2048,6 +2182,14 @@ enum ListFilter: Int, CaseIterable, Identifiable {
                 uploadedBytes += Int64(data.count)
             }
             let from = try MailSenderWire.fromAddress(item: item, allowedAddresses: context.addresses)
+            var finalHTML = transportHTML
+            if item.trackingEnabled == true {
+                failureStage = "登记邮件追踪"
+                let registered = try await tracking.prepare(item, context: context)
+                try checkSendContext()
+                guard let fragment = registered.fragment else { throw MailTrackingFailure.response }
+                finalHTML = MailTrackingHTML.append(fragment, to: transportHTML, tid: registered.tid)
+            }
             let sendDiagnostic: MailSendDiagnostic
             let transmit: @MainActor () async throws -> String?
             if publicReplyFallback {
@@ -2057,7 +2199,7 @@ enum ListFilter: Int, CaseIterable, Identifiable {
                     subject: item.subject, sender: item.from, preview: "", date: Date(), attachment: false, unread: false)
                 var payload: [String: Any] = ["action": "reply", "fromAddress": from, "toAddress": addresses.joined(separator: ","),
                     "ccAddress": copies.joined(separator: ","), "bccAddress": blind.joined(separator: ","), "subject": Trust.text(item.subject, limit: 1000),
-                    "content": transportHTML, "mailFormat": "html", "encoding": "UTF-8", "askReceipt": item.receipt ? "yes" : "no"]
+                    "content": finalHTML, "mailFormat": "html", "encoding": "UTF-8", "askReceipt": item.receipt ? "yes" : "no"]
                 if !publicUploads.isEmpty { payload["attachments"] = publicUploads }
                 if item.priority != 3 { payload["priority"] = item.priority == 1 ? "high" : "low" }
                 var diagnostic = try MailSendDiagnostic(body: payload, reply: true, inlineImages: preparedBody.images.count,
@@ -2071,7 +2213,7 @@ enum ListFilter: Int, CaseIterable, Identifiable {
             } else {
                 let fields = try MailOfficialProtocol.sendFields(accountID: context.remoteID, from: from,
                     to: addresses.joined(separator: ","), cc: copies.joined(separator: ","), bcc: blind.joined(separator: ","),
-                    subject: Trust.text(item.subject, limit: 1000), html: transportHTML, files: uploads,
+                    subject: Trust.text(item.subject, limit: 1000), html: finalHTML, files: uploads,
                     receipt: item.receipt, priority: item.priority, inReplyTo: item.inReplyTo, references: item.referencesHeader)
                 let multipart = try MailOfficialProtocol.multipart(fields: fields)
                 sendDiagnostic = MailSendDiagnostic(officialFields: fields, requestBytes: multipart.body.count, reply: replying,
@@ -2088,7 +2230,12 @@ enum ListFilter: Int, CaseIterable, Identifiable {
             guard outboxStore.update(id, { $0.postStarted = true; $0.sendDiagnostic = sendDiagnostic }) else { throw MailFailure.response }
             postStarted = true
             let acknowledgedID = try await transmit()
-            guard finishAcknowledgedSend(item, messageID: acknowledgedID) else { return }
+            guard finishAcknowledgedSend(item, messageID: acknowledgedID, context: context) else { return }
+            if let source = item.replySource {
+                markMessageReplied(source.key, id: source.id, threadID: source.threadID)
+            } else if let replyID = item.replyToMessageID {
+                markMessageReplied("", id: replyID)
+            }
             guard acceptsContextAction(accountID: account.id, lifetime: sendLifetime),
                   MailInlineImageSend.sameContext(sessions[account.id], expected: context) else { return }
             let cloudIDs = Set((item.cloudDraftIDs ?? []) + (item.serverDraft.map { [$0.id] } ?? []))
@@ -2116,7 +2263,7 @@ enum ListFilter: Int, CaseIterable, Identifiable {
             let responseFailure = error as? MailUploadResponseFailure
             let officialFailure = error as? MailOfficialFailure
             let rejected: Bool = !postStarted || imageFailure != nil || serverFailure?.definitelyRejected == true || (failure.map { [.auth, .rate, .rejected, .folder].contains($0) } ?? false)
-            let failureLabel = failureStage + "：" + (officialFailure?.label ?? responseFailure?.label ?? serverFailure?.label ?? uploadFailure?.label ?? imageFailure?.label ?? failure?.label ?? MailFailure.network.label)
+            let failureLabel = failureStage + "：" + ((error as? MailTrackingFailure)?.errorDescription ?? officialFailure?.label ?? responseFailure?.label ?? serverFailure?.label ?? uploadFailure?.label ?? imageFailure?.label ?? failure?.label ?? MailFailure.network.label)
             let saved = outboxStore.update(id) {
                 $0.state = rejected ? "failed" : "uncertain"
                 $0.error = failureLabel
@@ -2135,12 +2282,21 @@ enum ListFilter: Int, CaseIterable, Identifiable {
               MailInlineImageSend.sameContext(sessions[accountID], expected: context) else { throw MailFailure.auth }
     }
 
-    @discardableResult private func finishAcknowledgedSend(_ item: OutboxItem, messageID: String? = nil) -> Bool {
-        guard outboxStore.update(item.id, { $0.state = "sent"; $0.error = nil; $0.sentMessageID = messageID }) else {
+    @discardableResult private func finishAcknowledgedSend(_ item: OutboxItem, messageID: String? = nil, context: MailboxSession? = nil) -> Bool {
+        guard outboxStore.update(item.id, {
+            $0.state = "sent"; $0.error = nil; $0.sentMessageID = messageID
+            // A manual reconciliation has no transport timestamp. Never invent
+            // one from queue creation or the time the user confirms delivery.
+            if let context, context.accountID == item.accountID {
+                $0.sentAt = Date(); $0.sentRemoteID = context.remoteID; $0.sentOrigin = context.origin
+            }
+        }) else {
             reloadOutbox(); status = "服务器已接收邮件，但本机状态保存失败。请勿重试，请先核对已发送邮件。"
             return false
         }
         if let draftID = item.draftID { try? draftStore.remove(draftID) }
+        if let source = item.forwardOf { markMessageForwarded(source) }
+        if item.trackingEnabled == true { tracking.acknowledged(item.id, messageID: messageID) }
         outboxStore.releaseAttachments(item.id)
         // Keep a durable terminal receipt: missing queue data is never success.
         _ = outboxStore.update(item.id) { $0.html = "" }
@@ -2163,10 +2319,148 @@ enum ListFilter: Int, CaseIterable, Identifiable {
         return []
     }
 
-    func selectAllRows() { selectedKeys = Set(rows.map { $0.key }) }
+    var isDraftsScope: Bool {
+        if scope.kind == .folder, let folderID = scope.folderID, let accountID = scope.accountID {
+            return folders(accountID).first { $0.id == folderID }?.systemName == "Drafts"
+        }
+        return false
+    }
+
+    func selectAllDrafts() {
+        let drafts: [MailDraft]
+        if let accountID = scope.accountID {
+            drafts = draftStore.all(accounts: [accountID])
+        } else {
+            drafts = draftStore.all(accounts: Set(accounts.map { $0.id }))
+        }
+        selectedDraftIDs = Set(drafts.map { $0.id })
+    }
+
+    func clearDraftSelection() {
+        selectedDraftIDs = []
+        selectedKeys = []
+    }
+
+    func deleteSelectedDrafts() {
+        let count = selectedDraftIDs.count
+        for id in selectedDraftIDs {
+            try? draftStore.remove(id)
+        }
+        selectedDraftIDs = []
+        draftsVersion += 1
+        status = "已删除 \(count) 封草稿"
+    }
+
+    /// Strip `data-ml-signature` and `data-ml-quote` sections from HTML,
+    /// then return trimmed plain text of the remaining authored body.
+    func authoredPlainText(from html: String) -> String {
+        MailHTML.authoredPlainText(from: html)
+    }
+
+    func deleteEmptyDrafts() {
+        let drafts: [MailDraft]
+        if let accountID = scope.accountID {
+            drafts = draftStore.all(accounts: [accountID])
+        } else {
+            drafts = draftStore.all(accounts: Set(accounts.map { $0.id }))
+        }
+        var count = 0
+        for draft in drafts {
+            let hasTo = !draft.to.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let hasCc = !draft.cc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let hasSubject = !draft.subject.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let hasFiles = !draft.files.isEmpty
+            // Check body, excluding signature and quote sections
+            let isBodyEmpty: Bool
+            if let html = draft.htmlBody, !html.isEmpty {
+                isBodyEmpty = MailHTML.authoredPlainText(from: html).isEmpty
+            } else {
+                var plainBody = draft.body.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let sig = draft.managedSignature?.text, !sig.isEmpty {
+                    plainBody = plainBody.replacingOccurrences(of: sig.trimmingCharacters(in: .whitespacesAndNewlines), with: "")
+                }
+                isBodyEmpty = plainBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+            if !hasTo && !hasCc && !hasSubject && !hasFiles && isBodyEmpty {
+                try? draftStore.remove(draft.id)
+                count += 1
+            }
+        }
+        if count > 0 {
+            selectedDraftIDs = []
+            draftsVersion += 1
+            status = "已清理 \(count) 封空白草稿"
+        } else {
+            status = "没有需要清理的空白草稿"
+        }
+    }
+
+    func markMessageReplied(_ key: String, id: String? = nil, threadID: String? = nil) {
+        let msg = messageStore[key]
+        let realID = id ?? msg?.id ?? ""
+        let realThreadID = threadID ?? msg?.threadID
+        if !key.isEmpty || !realID.isEmpty {
+            repliedStore.markReplied(key: key, id: realID, threadID: realThreadID)
+        }
+        var updatedMessages: [MailMessage] = []
+        if var m = msg {
+            m.status2 = m.forwarded ? "3" : "1"
+            messageStore[key] = m
+            updatedMessages.append(m)
+        }
+        for i in rows.indices {
+            if rows[i].key == key ||
+               (!realID.isEmpty && rows[i].id == realID) ||
+               (realThreadID != nil && rows[i].threadID == realThreadID) {
+                rows[i].status2 = rows[i].forwarded ? "3" : "1"
+            }
+        }
+        if !updatedMessages.isEmpty, let accountID = updatedMessages.first?.accountID {
+            cache.store(updatedMessages, account: accountID, replace: false)
+        }
+    }
+
+    func markMessageForwarded(_ source: MailMessage) {
+        guard accounts.contains(where: { $0.id == source.accountID }), Trust.mail(source.origin),
+              Trust.numericID(source.remoteID) != nil, Trust.numericID(source.id) != nil else { return }
+        repliedStore.markForwarded(key: source.key, id: source.id)
+        func matches(_ message: MailMessage) -> Bool {
+            message.accountID == source.accountID && message.remoteID == source.remoteID &&
+            message.origin == source.origin && message.id == source.id
+        }
+        var updated: [MailMessage] = []
+        for (key, var message) in messageStore where matches(message) {
+            repliedStore.applyStatus(to: &message)
+            messageStore[key] = message; updated.append(message)
+        }
+        if updated.isEmpty { var original = source; repliedStore.applyStatus(to: &original); updated = [original] }
+        cache.store(updated, account: source.accountID, replace: false)
+        if var current = detail, matches(current.message) {
+            repliedStore.applyStatus(to: &current.message); detail = current
+        }
+        for index in threadRows.indices where matches(threadRows[index]) { repliedStore.applyStatus(to: &threadRows[index]) }
+        for (key, var current) in threadDetails where matches(current.message) {
+            repliedStore.applyStatus(to: &current.message); threadDetails[key] = current
+        }
+        rebuildRows()
+    }
+
+    func selectAllRows() {
+        if isDraftsScope {
+            selectAllDrafts()
+            return
+        }
+        selectedKeys = Set(rows.map { $0.key })
+    }
     func archiveSelection() { perform(.archive, on: selectedMessages()) }
     func unarchiveSelection() { perform(.unarchive, on: selectedMessages()) }
-    func deleteSelection() { perform(.trash, on: selectedMessages()) }
+    func deleteSelection() {
+        if isDraftsScope && !selectedDraftIDs.isEmpty {
+            deleteSelectedDrafts()
+            return
+        }
+        perform(.trash, on: selectedMessages())
+    }
     func markReadSelection(_ unread: Bool) { perform(unread ? .unread : .read, on: selectedMessages()) }
     func flagSelection() {
         guard let message = activeMessage() else { return }
@@ -2268,9 +2562,13 @@ enum ListFilter: Int, CaseIterable, Identifiable {
         <p>新的阅读器使用独立、禁脚本的 WebKit 文档渲染白名单 HTML，外部图片需要显式加载。</p>
         <p>谢谢！<br/>\(message.sender)</p>
         """
-        return MailDetail(message: message, from: "\(message.sender) <design@northwind.studio>",
+        var detail = MailDetail(message: message, from: "\(message.sender) <design@northwind.studio>",
                           to: "mira@aurora.mail", cc: "", replyTo: "", html: html,
                           attachments: message.attachment ? [MailAttachment(id: "1", name: "brief.pdf", size: 248_000, cid: "")] : [],
                           inline: [])
+        if CommandLine.arguments.contains("--source-ip-preview") {
+            detail.sourceIP = MailSourceIP.parse(["Received": "from fixture.example ([67.195.1.2]) by example.test; local fixture"])
+        }
+        return detail
     }
 }

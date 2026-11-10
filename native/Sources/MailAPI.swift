@@ -219,6 +219,7 @@ struct InboxPage {
         }
         detail.rfcMessageID = field("Message-ID"); detail.rfcReferences = field("References"); detail.rfcInReplyTo = field("In-Reply-To")
         detail.replyHeadersChecked=true
+        detail.sourceIP = MailSourceIP.parse(headers)
         detail.imageSourceRecovery=recovery
         detail.bcc=Trust.text(metadata["bccAddress"],limit:4000);return detail
     }

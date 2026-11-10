@@ -13,6 +13,11 @@ import AppKit
 }
 
 @MainActor func runMailWorkflowRepairTests(_ require: (Bool, String) -> Void) async {
+    await runMailImageByteCacheTests(require)
+    await runMailSentStatusTests(require)
+    await runMailForwardMarkerTests(require)
+    await runMailAttachmentPreviewTests(require)
+    await runMailListCountryTests(require)
     let fm = FileManager.default
     let root = fm.temporaryDirectory.appendingPathComponent("mail-workflow-repair-\(UUID().uuidString)")
     try! fm.createDirectory(at: root, withIntermediateDirectories: true)
@@ -306,7 +311,47 @@ import AppKit
     require(state.composeControllers.isEmpty, "closing composer controller removes it")
     state.openReplyDraft(replySource, mode: .reply)
     require(state.inlineReplyModel != nil, "opening reply draft sets inline reply model")
+    state.popOutInlineReply()
+    require(state.composeControllers.count == 1, "pop out opens compose window controller")
+    let composer = state.composeControllers.first!
+    require(composer.windowShouldClose(composer.window) == false, "initial close initiates save and returns false")
+    require(composer.windowShouldClose(composer.window) == true, "subsequent close returns true while closing")
+    let closeDeadline = Date().addingTimeInterval(2.0)
+    while !state.composeControllers.isEmpty && Date() < closeDeadline {
+        try? await Task.sleep(nanoseconds: 50_000_000)
+    }
+    require(state.composeControllers.isEmpty, "closing composer controller with save removes it and saves draft")
+
+    state.openReplyDraft(replySource, mode: .reply)
+    require(state.inlineReplyModel != nil, "opening reply draft sets inline reply model")
     state.closeInlineReply(save: false)
     require(state.inlineReplyModel == nil, "discarding inline reply clears inline reply model")
 
+}
+
+/// Reply/Forward reuses image bytes the reader already downloaded.
+@MainActor func runMailImageByteCacheTests(_ require: (Bool, String) -> Void) async {
+    let cache = MailImageByteCache()
+    var calls = 0
+    let bytes = Data("image".utf8)
+    let first = try? await cache.data(for: "a") { calls += 1; return bytes }
+    let second = try? await cache.data(for: "a") { calls += 1; return Data() }
+    require(first == bytes && second == bytes && calls == 1, "image bytes downloaded for reading are reused by reply")
+    let gate = WorkflowGate()
+    final class Counter { var value = 0 }
+    let shared = Counter()
+    let one = Task { @MainActor in try? await cache.data(for: "b") { shared.value += 1; await gate.pause(); return bytes } }
+    for _ in 0..<500 where !gate.entered { await Task.yield() }
+    let two = Task { @MainActor in try? await cache.data(for: "b") { shared.value += 1; return Data() } }
+    for _ in 0..<20 { await Task.yield() }
+    gate.release()
+    let x = await one.value, y = await two.value
+    require(x == bytes && y == bytes && shared.value == 1, "concurrent requests for one image share a single download")
+    var failures = 0
+    _ = try? await cache.data(for: "c") { failures += 1; throw MailFailure.network }
+    let recovered = try? await cache.data(for: "c") { failures += 1; return bytes }
+    require(recovered == bytes && failures == 2, "a failed download is not cached and can be retried")
+    cache.removeAll()
+    _ = try? await cache.data(for: "a") { calls += 1; return bytes }
+    require(calls == 2, "account removal clears cached image bytes")
 }

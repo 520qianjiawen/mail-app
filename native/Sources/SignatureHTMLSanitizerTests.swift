@@ -62,4 +62,6 @@ func runSignatureHTMLSanitizerTests(_ require: (Bool, String) -> Void) {
     require(SignatureHTML.sanitize("<img src='/logo.png'>", baseURL: URL(string: "file:///tmp/")) == nil, "non-HTTPS base cannot resolve resources")
     let inherited = SignatureHTML.sanitize("<html><head><style>body{font-size:13pt}</style></head><body style='color:#123'>Text</body></html>") ?? ""
     require(inherited.contains("font-size:13pt;color:#123"), "body typography transfers to inert fragment wrapper")
+    let divider = SignatureHTML.sanitize("<hr style='border:none;border-top:1.5px solid rgb(0, 122, 255);background:linear-gradient(to right, rgb(0, 122, 255), transparent);height:1.5px;margin:6px 0 10px 0;width:480px'><span>Signature</span>") ?? ""
+    require(divider.contains("linear-gradient(to right, rgb(0, 122, 255), transparent)") && divider.contains("border-top:1.5px solid rgb(0, 122, 255)") && divider.contains("<hr"), "gradient divider line and hr tag are preserved")
 }

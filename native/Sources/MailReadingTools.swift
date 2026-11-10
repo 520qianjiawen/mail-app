@@ -3,7 +3,7 @@ import Darwin
 
 /// Derived reading projection only. Stored/sent HTML is never rewritten.
 enum MailHistoryProjection {
-    struct Result { let html: String; let folded: Bool }
+    struct Result: Sendable { let html: String; let folded: Bool }
     static func summary(_ html: String) -> Result {
         guard html.utf8.count <= 8 * 1024 * 1024, let document = MailHTML.parsed(html),
               let body = try? document.nodes(forXPath: "//body").first else { return Result(html: html, folded: false) }

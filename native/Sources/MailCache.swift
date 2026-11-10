@@ -14,6 +14,7 @@ final class MailCache {
         execute("CREATE TABLE IF NOT EXISTS details (key TEXT PRIMARY KEY, updated REAL NOT NULL, payload BLOB NOT NULL)")
         execute("CREATE TABLE IF NOT EXISTS offline_pins (key TEXT PRIMARY KEY)")
         execute("CREATE TABLE IF NOT EXISTS catalogs (account TEXT PRIMARY KEY, payload BLOB NOT NULL)")
+        execute("CREATE TABLE IF NOT EXISTS source_ips (key TEXT PRIMARY KEY, account TEXT NOT NULL, updated REAL NOT NULL, payload BLOB NOT NULL)")
     }
     deinit { if let database { sqlite3_close(database) } }
     private let transient = unsafeBitCast(-1,to:sqlite3_destructor_type.self)
@@ -49,7 +50,7 @@ final class MailCache {
         }; execute("COMMIT")
     }
     func removeMessage(_ key:String) {
-        for table in ["inbox","details"] {
+        for table in ["inbox","details","source_ips"] {
             var s:OpaquePointer?;guard sqlite3_prepare_v2(database,"DELETE FROM \(table) WHERE key=?",-1,&s,nil)==SQLITE_OK else{continue}
             sqlite3_bind_text(s,1,key,-1,transient);sqlite3_step(s);sqlite3_finalize(s)
         }
@@ -68,6 +69,11 @@ final class MailCache {
         sqlite3_bind_text(s,1,context.accountID,-1,transient);_=data.withUnsafeBytes{sqlite3_bind_blob(s,2,$0.baseAddress,Int32(data.count),transient)};sqlite3_step(s)
     }
     func removeAccount(_ account:String) {
+        var sourceStatement: OpaquePointer?
+        if sqlite3_prepare_v2(database, "DELETE FROM source_ips WHERE account=?", -1, &sourceStatement, nil) == SQLITE_OK {
+            sqlite3_bind_text(sourceStatement, 1, account, -1, transient); sqlite3_step(sourceStatement)
+        }
+        sqlite3_finalize(sourceStatement)
         for message in messages(accounts:[account]) {removeMessage(message.key)}
         var s:OpaquePointer?;sqlite3_prepare_v2(database,"DELETE FROM catalogs WHERE account=?",-1,&s,nil);sqlite3_bind_text(s,1,account,-1,transient);sqlite3_step(s);sqlite3_finalize(s)
     }
@@ -93,11 +99,41 @@ final class MailCache {
         guard sqlite3_step(statement) == SQLITE_ROW, let bytes = sqlite3_column_blob(statement,0), let detail = try? JSONDecoder().decode(MailDetail.self,from:Data(bytes:bytes,count:Int(sqlite3_column_bytes(statement,0)))), detail.message.key == message.key else { return nil }; return detail
     }
     func store(_ detail:MailDetail) {
+        if let source = detail.sourceIP { storeSourceIP(source, for: detail.message) }
         guard let data = try? JSONEncoder().encode(detail) else { return }
         var statement:OpaquePointer?; sqlite3_prepare_v2(database,"INSERT OR REPLACE INTO details VALUES(?,?,?)",-1,&statement,nil)
         sqlite3_bind_text(statement,1,detail.message.key,-1,transient); sqlite3_bind_double(statement,2,Date().timeIntervalSince1970)
         _ = data.withUnsafeBytes{sqlite3_bind_blob(statement,3,$0.baseAddress,Int32(data.count),transient)}
         sqlite3_step(statement); sqlite3_finalize(statement)
         execute("DELETE FROM details WHERE key NOT IN (SELECT key FROM offline_pins) AND key NOT IN (SELECT key FROM details WHERE key NOT IN (SELECT key FROM offline_pins) ORDER BY updated DESC LIMIT 200)")
+    }
+
+    func sourceIP(_ message: MailMessage) -> MailSourceIP? {
+        var statement: OpaquePointer?
+        if sqlite3_prepare_v2(database, "SELECT payload FROM source_ips WHERE key=?", -1, &statement, nil) == SQLITE_OK {
+            defer { sqlite3_finalize(statement) }
+            sqlite3_bind_text(statement, 1, message.key, -1, transient)
+            if sqlite3_step(statement) == SQLITE_ROW, let bytes = sqlite3_column_blob(statement, 0),
+               let value = try? JSONDecoder().decode(MailSourceIPRecord.self, from: Data(bytes: bytes, count: Int(sqlite3_column_bytes(statement, 0)))), value.matches(message) {
+                return value.source
+            }
+        }
+        // Migrate source data from pre-existing body caches once, without a network request.
+        if let old = detail(message), MailSourceIPRecord(message: old.message, source: .init(candidates: [])).matches(message), let source = old.sourceIP {
+            storeSourceIP(source, for: message); return source
+        }
+        return nil
+    }
+    func storeSourceIP(_ source: MailSourceIP, for message: MailMessage) {
+        guard let data = try? JSONEncoder().encode(MailSourceIPRecord(message: message, source: source)) else { return }
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, "INSERT OR REPLACE INTO source_ips VALUES(?,?,?,?)", -1, &statement, nil) == SQLITE_OK else { return }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_text(statement, 1, message.key, -1, transient)
+        sqlite3_bind_text(statement, 2, message.accountID, -1, transient)
+        sqlite3_bind_double(statement, 3, Date().timeIntervalSince1970)
+        _ = data.withUnsafeBytes { sqlite3_bind_blob(statement, 4, $0.baseAddress, Int32(data.count), transient) }
+        sqlite3_step(statement)
+        execute("DELETE FROM source_ips WHERE key NOT IN (SELECT key FROM source_ips ORDER BY updated DESC LIMIT 10000)")
     }
 }

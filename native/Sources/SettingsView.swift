@@ -47,6 +47,7 @@ struct SettingsView: View {
                     case 6: storage
                     case 7: AccountSignatureSettingsView(state: state, initialAccountID: signatureAccountID)
                     case 8: shortcutsSection
+                    case 9: MailTrackingSettingsView(controller: state.tracking)
                     default: accounts
                     }
                 }
@@ -72,7 +73,8 @@ struct SettingsView: View {
                     ("假期回复", "sun.max"),
                     ("存储", "internaldrive"),
                     ("签名", "signature"),
-                    ("快捷键", "command")
+                    ("快捷键", "command"),
+                    ("邮件追踪", "eye")
                 ]
                 ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                     Button {
@@ -248,6 +250,7 @@ struct SettingsView: View {
     private var reading: some View {
         VStack(alignment: .leading, spacing: 14) {
             sectionTitle("阅读与编写偏好", detail: "个性化设置邮件显示、编写与默认密送规则，保存在本机。")
+            MailIPLocationSettingsView()
             SettingsCard(title: "外观主题") {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {

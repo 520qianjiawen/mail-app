@@ -6,6 +6,7 @@ import WebKit
     var checks=0
     func require(_ condition:@autoclosure()->Bool,_ label:String) { checks+=1;if !condition() { print("FAIL: \(label)"); exit(1) } }
     runMailOriginalHTMLTests { require($0, $1) }
+    runMailSourceIPTests { require($0, $1) }
     let a = MailAccount(id:"one",name:"工作",region:"global"), b = MailAccount(id:"two",name:"个人",region:"global")
     require(a.dataIdentifier != b.dataIdentifier,"account storage isolation")
     require(a.dataIdentifier == MailAccount(id:"one",name:"Renamed",region:"global").dataIdentifier,"rename retains session")
@@ -42,6 +43,12 @@ import WebKit
     require(cached.messages(accounts:[a.id,b.id]).count == 2,"identical message IDs in different accounts remain separate")
     require(cached.messages(accounts:[b.id]).first?.accountID == b.id,"cache filters signed-in account identities")
     let detail=MailDetail(message:message,from:"Sender <sender@example.test>",to:"own@example.test, other@example.test",cc:"other@example.test, cc@example.test",replyTo:"reply@example.test",html:"<p>Cached body</p>",attachments:[],inline:[])
+    let legacyDetailData = try! JSONEncoder().encode(detail)
+    require((try? JSONDecoder().decode(MailDetail.self, from: legacyDetailData))?.sourceIP == nil, "old cached mail without source IP remains decodable")
+    var sourceDetail = detail
+    sourceDetail.sourceIP = MailSourceIP.parse(["X-Originating-IP": "[8.8.8.8]"])
+    cached.store(sourceDetail)
+    require(MailCache(directory:temp).detail(message)?.sourceIP == sourceDetail.sourceIP, "per-message source IP evidence persists in existing body cache")
     cached.store(detail)
     require(cached.detail(message)?.html == detail.html && cached.detail(other) == nil,"body cache cannot cross account boundary")
     require(MailCache(directory:temp).detail(message)?.message.key == message.key,"body cache persists across reopen")
@@ -115,6 +122,10 @@ import WebKit
     require((try? MailAction.label("../../",true).payload([pinned]))==nil,"label traversal rejected")
     require(MailLabel(id:"1",name:"设计",color:"#5B6CFF").tintIndex >= 0,"label color mapping")
     require(MailHTML.document("<p>x</p>",dark:true).contains("color-scheme:dark") && MailHTML.document("<p>x</p>",dark:true).contains("background:transparent"),"dark body palette keeps transparent background")
+    let signatureReader = MailHTML.document("<div style='font:12pt Verdana,Arial,sans-serif'><hr style='border:none;background:linear-gradient(to right, rgb(0, 122, 255), transparent);height:1.5px;width:480px'><span style='border-radius:4px'>Example</span></div>")
+    require(signatureReader.contains("font:12pt Verdana,Arial,sans-serif") && signatureReader.contains("background:linear-gradient(to right, rgb(0, 122, 255), transparent)") && signatureReader.contains("border-radius:4px"), "reader retains signature font, gradient and rounded corners")
+    let hostileReader = MailHTML.document("<div style='font:12px url(https://bad.example/a);background:linear-gradient(red,url(https://bad.example/b));background-image:linear-gradient(red,url(https://bad.example/c))'>x</div>")
+    require(!hostileReader.contains("bad.example"), "reader rejects CSS URLs hidden in font and gradients")
     let darkCard = MailHTML.document("<div style='background-color:#ffffff;color:#111111;border-color:#eeeeee'>x</div>", dark: true)
     require(!darkCard.contains("#ffffff") && !darkCard.contains("#111111") && !darkCard.contains("#eeeeee"),"dark mode remaps light surfaces, dark text and light borders")
     require(darkCard.contains("background-color:#") && darkCard.contains("color:#"),"dark mode keeps mapped declarations")
@@ -126,6 +137,10 @@ import WebKit
     require(!MailHTML.document("<table cellpadding='999999' border='javascript:alert(1)'><tr><td>x</td></tr></table>").contains("cellpadding="), "unbounded table presentation attributes are dropped")
     let lightCard = MailHTML.document("<div style='background-color:#ffffff;color:#111111'>x</div>", dark: false)
     require(lightCard.contains("#ffffff") && lightCard.contains("#111111"),"light mode preserves authored colours")
+    let buttonWithCenter = MailHTML.document("<a href='https://instagram.com/reset'><center><font size='3'><span>Reset your password</span></font></center></a>")
+    require(buttonWithCenter.contains("href=\"https://instagram.com/reset\"") && buttonWithCenter.contains("Reset your password") && buttonWithCenter.contains("<a href=\"https://instagram.com/reset\" rel=\"noreferrer noopener\">"), "centered buttons inside anchors retain clickable link wrapping")
+    let buttonWithDiv = MailHTML.document("<a href=' https://example.test/action \n'><div style='background:#007bff;padding:10px'><span>Action</span></div></a>")
+    require(buttonWithDiv.contains("href=\"https://example.test/action\"") && buttonWithDiv.contains("Action"), "div buttons inside anchors and trimmed URLs retain clickable link wrapping")
     let paper = MailHTML.document("<p>x</p>", paper: true)
     require(paper.contains("background:#ffffff") && paper.contains("color:#1c1d21"),"paper mode gives the email an opaque light page")
     require(MailHTML.components("rgb(255,255,255)") != nil && MailHTML.components("#eee") != nil && MailHTML.components("transparent") == nil,"colour parser handles hex, rgb and transparent")
@@ -197,6 +212,10 @@ import WebKit
     draftWithBcc.bcc = testState.defaultBcc(for: a.id, from: "sender@example.test")
     let composeModel = ComposeModel(state: testState, draft: draftWithBcc)
     require(composeModel.showBcc && composeModel.bcc.contains("global@example.test"), "compose model displays bcc row when default bcc present")
+    let htmlWithNestedSig = "<div style=\"font:12pt Verdana\"><br></div><div data-ml-signature=\"test\"><table><tbody><tr><td><div><span>Company</span><span>.</span></div></td></tr></tbody></table></div>"
+    require(MailHTML.authoredPlainText(from: htmlWithNestedSig).isEmpty, "authoredPlainText strips complex nested signature table returning empty")
+    let htmlWithContent = "<div style=\"font:12pt Verdana\">Hello World</div><div data-ml-signature=\"test\"><table><tr><td>Sig</td></tr></table></div>"
+    require(MailHTML.authoredPlainText(from: htmlWithContent) == "Hello World", "authoredPlainText preserves authored content while stripping signature")
     runMailSyncPolicyTests { condition, label in require(condition, label) }
     runMailUnreadCounterTests { condition, label in require(condition, label) }
     runComposeFormattingTests { condition, label in require(condition, label) }

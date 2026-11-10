@@ -9,7 +9,8 @@ struct MailAttachment: Codable, Sendable {
     }
 }
 struct MailDetail: Codable, Sendable {
-    let message:MailMessage, from:String, to:String, cc:String, replyTo:String, html:String
+    var message:MailMessage
+    let from:String, to:String, cc:String, replyTo:String, html:String
     let attachments:[MailAttachment], inline:[MailAttachment]
     var bcc:String?=nil
     // Optional for backwards-compatible decoding of old body caches/drafts.
@@ -18,13 +19,70 @@ struct MailDetail: Codable, Sendable {
     var rfcMessageID:String?=nil
     var rfcReferences:String?=nil
     var rfcInReplyTo:String?=nil
+    var sourceIP:MailSourceIP?=nil
+    var visibleAttachments: [MailAttachment]
     var replyAddress:String {
         let reply = MailAddresses.extract(replyTo)
         return (reply.isEmpty ? MailAddresses.extract(from) : reply).joined(separator:", ")
     }
+
+    enum CodingKeys: String, CodingKey {
+        case message, from, to, cc, replyTo, html, attachments, inline, bcc,
+             replyHeadersChecked, imageSourceRecovery, rfcMessageID, rfcReferences,
+             rfcInReplyTo, sourceIP, visibleAttachments
+    }
+
+    init(message: MailMessage, from: String, to: String, cc: String, replyTo: String, html: String,
+         attachments: [MailAttachment], inline: [MailAttachment], bcc: String? = nil,
+         replyHeadersChecked: Bool? = nil, imageSourceRecovery: String? = nil,
+         rfcMessageID: String? = nil, rfcReferences: String? = nil, rfcInReplyTo: String? = nil,
+         sourceIP: MailSourceIP? = nil, visibleAttachments: [MailAttachment]? = nil) {
+        self.message = message
+        self.from = from
+        self.to = to
+        self.cc = cc
+        self.replyTo = replyTo
+        self.html = html
+        self.attachments = attachments
+        self.inline = inline
+        self.bcc = bcc
+        self.replyHeadersChecked = replyHeadersChecked
+        self.imageSourceRecovery = imageSourceRecovery
+        self.rfcMessageID = rfcMessageID
+        self.rfcReferences = rfcReferences
+        self.rfcInReplyTo = rfcInReplyTo
+        self.sourceIP = sourceIP
+        self.visibleAttachments = visibleAttachments ?? Self.computeVisibleAttachments(attachments: attachments, inline: inline, html: html)
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        message = try container.decode(MailMessage.self, forKey: .message)
+        from = try container.decode(String.self, forKey: .from)
+        to = try container.decode(String.self, forKey: .to)
+        cc = try container.decode(String.self, forKey: .cc)
+        replyTo = try container.decode(String.self, forKey: .replyTo)
+        html = try container.decode(String.self, forKey: .html)
+        attachments = try container.decode([MailAttachment].self, forKey: .attachments)
+        inline = try container.decode([MailAttachment].self, forKey: .inline)
+        bcc = try container.decodeIfPresent(String.self, forKey: .bcc)
+        replyHeadersChecked = try container.decodeIfPresent(Bool.self, forKey: .replyHeadersChecked)
+        imageSourceRecovery = try container.decodeIfPresent(String.self, forKey: .imageSourceRecovery)
+        rfcMessageID = try container.decodeIfPresent(String.self, forKey: .rfcMessageID)
+        rfcReferences = try container.decodeIfPresent(String.self, forKey: .rfcReferences)
+        rfcInReplyTo = try container.decodeIfPresent(String.self, forKey: .rfcInReplyTo)
+        sourceIP = try container.decodeIfPresent(MailSourceIP.self, forKey: .sourceIP)
+        if let stored = try container.decodeIfPresent([MailAttachment].self, forKey: .visibleAttachments) {
+            visibleAttachments = stored
+        } else {
+            visibleAttachments = Self.computeVisibleAttachments(attachments: attachments, inline: inline, html: html)
+        }
+    }
+
     /// Returns normal attachments plus any inline attachments that are not
     /// referenced in the HTML body, so orphaned signature/inline images are not lost.
-    var visibleAttachments: [MailAttachment] {
+    static func computeVisibleAttachments(attachments: [MailAttachment], inline: [MailAttachment], html: String) -> [MailAttachment] {
+        guard !inline.isEmpty else { return attachments }
         var list = attachments
         var referenced = Set<String>()
         if let root = MailHTML.parsed(html)?.rootElement() {
@@ -112,13 +170,177 @@ enum MailAddresses {
 // The authenticated account WebKit view never receives message HTML. A separate,
 // cookie-free, script-disabled view renders this allowlisted fragment only.
 enum MailHTML {
+    static func sanitizeAnchorsForParser(_ html: String) -> String {
+        guard !html.isEmpty else { return html }
+        let utf8 = Array(html.utf8)
+        let count = utf8.count
+        guard count >= 3 else { return html }
+
+        let b_less: UInt8 = 60 // '<'
+        let b_slash: UInt8 = 47 // '/'
+        let b_greater: UInt8 = 62 // '>'
+
+        // Fast presence check
+        var hasA = false
+        var hasDivOrP = false
+        var hasCenter = false
+
+        var idx = 0
+        while idx < count - 2 {
+            if utf8[idx] == b_less {
+                let c1 = utf8[idx + 1] | 0x20
+                if c1 == 97 { // 'a'
+                    let c2 = utf8[idx + 2]
+                    if c2 == 32 || c2 == 62 || c2 == 47 || c2 == 9 || c2 == 10 || c2 == 13 {
+                        hasA = true
+                    }
+                } else if c1 == 99 && idx + 6 < count { // 'c' -> 'center'
+                    if (utf8[idx + 2] | 0x20) == 101 && (utf8[idx + 3] | 0x20) == 110 &&
+                       (utf8[idx + 4] | 0x20) == 116 && (utf8[idx + 5] | 0x20) == 101 &&
+                       (utf8[idx + 6] | 0x20) == 114 {
+                        hasCenter = true
+                    }
+                } else if (c1 == 100 && (utf8[idx + 2] | 0x20) == 105) || c1 == 112 { // 'di' or 'p'
+                    hasDivOrP = true
+                }
+            }
+            if hasCenter && hasA && hasDivOrP { break }
+            idx += 1
+        }
+
+        if !hasCenter && (!hasA || !hasDivOrP) {
+            return html
+        }
+
+        var result = [UInt8]()
+        result.reserveCapacity(count + 512)
+
+        func isTagDelim(_ b: UInt8) -> Bool {
+            b == 32 || b == 62 || b == 47 || b == 9 || b == 10 || b == 13
+        }
+
+        var i = 0
+        var anchorDepth = 0
+
+        while i < count {
+            if utf8[i] == b_less && i + 1 < count {
+                let next = utf8[i + 1]
+                let c1 = next | 0x20
+
+                // Check <center> / <center ...>
+                if c1 == 99 && i + 6 < count &&
+                   (utf8[i + 2] | 0x20) == 101 && (utf8[i + 3] | 0x20) == 110 &&
+                   (utf8[i + 4] | 0x20) == 116 && (utf8[i + 5] | 0x20) == 101 &&
+                   (utf8[i + 6] | 0x20) == 114 {
+                    let delim = i + 7 < count ? utf8[i + 7] : 0
+                    if delim == 62 { // "<center>"
+                        result.append(contentsOf: "<span style=\"display:block;text-align:center\">".utf8)
+                        i += 8
+                        continue
+                    } else if isTagDelim(delim) { // "<center "
+                        result.append(contentsOf: "<span style=\"display:block;text-align:center\" ".utf8)
+                        i += 8
+                        continue
+                    }
+                }
+
+                // Check </center>
+                if next == b_slash && i + 7 < count &&
+                   (utf8[i + 2] | 0x20) == 99 && (utf8[i + 3] | 0x20) == 101 &&
+                   (utf8[i + 4] | 0x20) == 110 && (utf8[i + 5] | 0x20) == 116 &&
+                   (utf8[i + 6] | 0x20) == 101 && (utf8[i + 7] | 0x20) == 114 {
+                    var k = i + 8
+                    while k < count && utf8[k] != b_greater { k += 1 }
+                    if k < count {
+                        result.append(contentsOf: "</span>".utf8)
+                        i = k + 1
+                        continue
+                    }
+                }
+
+                // Check <a ...
+                if c1 == 97 && i + 2 < count && isTagDelim(utf8[i + 2]) {
+                    anchorDepth += 1
+                    result.append(utf8[i])
+                    i += 1
+                    continue
+                }
+
+                // Check </a ...
+                if next == b_slash && i + 2 < count && (utf8[i + 2] | 0x20) == 97 {
+                    let delim = i + 3 < count ? utf8[i + 3] : 0
+                    if delim == 62 || isTagDelim(delim) {
+                        anchorDepth = max(0, anchorDepth - 1)
+                        result.append(utf8[i])
+                        i += 1
+                        continue
+                    }
+                }
+
+                if anchorDepth > 0 {
+                    // Inside anchor: check <div ...
+                    if c1 == 100 && i + 3 < count && (utf8[i + 2] | 0x20) == 105 && (utf8[i + 3] | 0x20) == 118 {
+                        let delim = i + 4 < count ? utf8[i + 4] : 0
+                        if delim == 62 || isTagDelim(delim) {
+                            result.append(contentsOf: "<span style=\"display:block\"".utf8)
+                            i += 4 // skips "<div"
+                            continue
+                        }
+                    }
+
+                    // Inside anchor: check </div ...
+                    if next == b_slash && i + 4 < count &&
+                       (utf8[i + 2] | 0x20) == 100 && (utf8[i + 3] | 0x20) == 105 && (utf8[i + 4] | 0x20) == 118 {
+                        var k = i + 5
+                        while k < count && utf8[k] != b_greater { k += 1 }
+                        if k < count {
+                            result.append(contentsOf: "</span>".utf8)
+                            i = k + 1
+                            continue
+                        }
+                    }
+
+                    // Inside anchor: check <p ...
+                    if c1 == 112 {
+                        let delim = i + 2 < count ? utf8[i + 2] : 0
+                        if delim == 62 || isTagDelim(delim) {
+                            result.append(contentsOf: "<span style=\"display:block;margin:1em 0\"".utf8)
+                            i += 2 // skips "<p"
+                            continue
+                        }
+                    }
+
+                    // Inside anchor: check </p ...
+                    if next == b_slash && i + 2 < count && (utf8[i + 2] | 0x20) == 112 {
+                        var k = i + 3
+                        while k < count && utf8[k] != b_greater { k += 1 }
+                        if k < count {
+                            result.append(contentsOf: "</span>".utf8)
+                            i = k + 1
+                            continue
+                        }
+                    }
+                }
+            }
+
+            result.append(utf8[i])
+            i += 1
+        }
+
+        return String(decoding: result, as: UTF8.self)
+    }
+
     static func parsed(_ html:String)->XMLDocument? {
-        // API JSON has already decoded the body into Unicode. libxml's HTML
-        // fallback otherwise guesses a legacy encoding for fragments.
-        // Convert Outlook VML imagedata tags to img elements so HTML Tidy preserves them.
-        let unicode = html.replacingOccurrences(of:"<\\?xml[^>]*\\?>|<meta\\b[^>]*(?:charset\\s*=|http-equiv\\s*=)[^>]*>",with:"",options:[.regularExpression,.caseInsensitive])
-                          .replacingOccurrences(of:"<v:imagedata",with:"<img data-vml=\"true\"",options:.caseInsensitive)
-                          .replacingOccurrences(of:"<imagedata",with:"<img data-vml=\"true\"",options:.caseInsensitive)
+        let sanitized = sanitizeAnchorsForParser(html)
+        var unicode = sanitized
+        if unicode.contains("<?xml") || unicode.range(of: "<meta", options: .caseInsensitive) != nil {
+            unicode = unicode.replacingOccurrences(of:"<\\?xml[^>]*\\?>|<meta\\b[^>]*(?:charset\\s*=|http-equiv\\s*=)[^>]*>",with:"",options:[.regularExpression,.caseInsensitive])
+        }
+        if unicode.range(of: "imagedata", options: .caseInsensitive) != nil {
+            unicode = unicode
+                .replacingOccurrences(of:"<v:imagedata",with:"<img data-vml=\"true\"",options:.caseInsensitive)
+                .replacingOccurrences(of:"<imagedata",with:"<img data-vml=\"true\"",options:.caseInsensitive)
+        }
         return try? XMLDocument(data:Data(("<meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\">"+unicode).utf8),options:[.documentTidyHTML,.nodeLoadExternalEntitiesNever])
     }
     static func escape(_ text:String) -> String { text.replacingOccurrences(of:"&",with:"&amp;").replacingOccurrences(of:"<",with:"&lt;").replacingOccurrences(of:">",with:"&gt;").replacingOccurrences(of:"\"",with:"&quot;").replacingOccurrences(of:"'",with:"&#39;") }
@@ -135,7 +357,7 @@ enum MailHTML {
             ? "color-scheme:dark}body{color:#e6e7ea;background:transparent}blockquote{border-left:2px solid #5a5d66;color:#a9adb7}a{color:#7aa2ff}"
             : "color-scheme:light}body{color:#1c1d21;background:transparent}blockquote{border-left:2px solid #dfe1e6;color:#5f6368}a{color:#3556d8}"
         return """
-        <!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; connect-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'; img-src \(imageSources); style-src 'unsafe-inline'"><meta name="viewport" content="width=device-width, initial-scale=1"><style>:root{\(palette)}html,body{overflow:hidden !important;overflow-x:hidden !important;overflow-y:hidden !important;height:auto !important;min-height:0 !important;margin:0;padding:0;font:15px -apple-system,BlinkMacSystemFont,sans-serif;line-height:1.65;overflow-wrap:anywhere}#mail-lite-content{display:flow-root;box-sizing:border-box;width:100%;height:auto;min-height:0;margin:0;padding:2px 0 8px}::-webkit-scrollbar{display:none !important;width:0px !important;height:0px !important;background:transparent !important}img{max-width:100% !important;height:auto !important;border-radius:4px;display:inline-block;vertical-align:middle}table{max-width:100% !important;table-layout:auto;word-wrap:break-word;overflow-wrap:anywhere;border-collapse:collapse}td,th{word-break:break-word;overflow-wrap:anywhere;vertical-align:top}div,p{word-wrap:break-word;overflow-wrap:anywhere;max-width:100%}a{overflow-wrap:break-all;word-break:break-word;text-underline-offset:2px}pre{white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:rgba(128,128,128,0.08);padding:8px 12px;border-radius:6px}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:rgba(128,128,128,0.08);padding:1px 4px;border-radius:3px}blockquote{margin:8px 0;padding:4px 0 4px 12px;border-radius:0}[data-mail-quote-separator="true"]{border-top:1px solid \(quoteLineColor) !important;margin-top:20px !important;padding-top:16px !important}</style></head><body><div id="mail-lite-content">\(fragment)</div></body></html>
+        <!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; connect-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'; img-src \(imageSources); style-src 'unsafe-inline'"><meta name="viewport" content="width=device-width, initial-scale=1"><style>:root{\(palette)}html,body{overflow:hidden !important;overflow-x:hidden !important;overflow-y:hidden !important;height:auto !important;min-height:0 !important;margin:0;padding:0;font:15px -apple-system,BlinkMacSystemFont,sans-serif;line-height:1.4;overflow-wrap:anywhere}#mail-lite-content{display:flow-root;box-sizing:border-box;width:100%;height:auto;min-height:0;margin:0;padding:2px 0 8px}::-webkit-scrollbar{display:none !important;width:0px !important;height:0px !important;background:transparent !important}img{max-width:100% !important;height:auto !important;border-radius:4px;display:inline-block;vertical-align:middle}table{font:inherit;max-width:100% !important;table-layout:auto;word-wrap:break-word;overflow-wrap:anywhere;border-collapse:collapse}td,th{word-break:break-word;overflow-wrap:anywhere;vertical-align:top}div,p{word-wrap:break-word;overflow-wrap:anywhere;max-width:100%}p{margin:0 0 0.45em}a{overflow-wrap:break-all;word-break:break-word;text-underline-offset:2px}pre{white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:rgba(128,128,128,0.08);padding:8px 12px;border-radius:6px}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:rgba(128,128,128,0.08);padding:1px 4px;border-radius:3px}blockquote{margin:8px 0;padding:4px 0 4px 12px;border-radius:0}[data-mail-quote-separator="true"]{border-top:1px solid \(quoteLineColor) !important;margin-top:20px !important;padding-top:16px !important}</style></head><body><div id="mail-lite-content">\(fragment)</div></body></html>
         """
     }
     static func clean(_ node:XMLNode, inline:[MailAttachment], images:Bool, dark:Bool = false, sessionImages:[String:String] = [:]) -> String {
@@ -163,11 +385,11 @@ enum MailHTML {
             } else if name == "style" {
                 let properties:Set<String> = [
                     "color","background-color","background-image","background",
-                    "font-size","font-family","font-weight","font-style","font-variant",
+                    "font","font-size","font-family","font-weight","font-style","font-variant",
                     "text-decoration","text-align","line-height","letter-spacing","white-space",
                     "margin","margin-left","margin-right","margin-top","margin-bottom",
                     "padding","padding-left","padding-right","padding-top","padding-bottom",
-                    "border","border-color","border-width","border-style","border-collapse",
+                    "border","border-color","border-width","border-style","border-collapse","border-radius",
                     "border-top","border-right","border-bottom","border-left",
                     "border-top-color","border-right-color","border-bottom-color","border-left-color",
                     "border-top-width","border-right-width","border-bottom-width","border-left-width",
@@ -181,6 +403,9 @@ enum MailHTML {
                     let property = pieces[0].trimmingCharacters(in:.whitespacesAndNewlines).lowercased()
                     let raw = pieces[1].trimmingCharacters(in:.whitespacesAndNewlines)
                     if property == "background-image" {
+                        if raw.lowercased().contains("gradient(") && SignatureHTML.safeCSSValue(raw) {
+                            return "background-image:" + raw
+                        }
                         if let urlStr = MailInlineImageReference.extractURLFromStyle(raw),
                            let file = MailInlineImageReference.attachment(for: urlStr, inline: inline) {
                             return "background-image:url(mail-inline://message/\(file.id))"
@@ -191,6 +416,9 @@ enum MailHTML {
                         return nil
                     }
                     if property == "background" {
+                        if raw.lowercased().contains("gradient(") && SignatureHTML.safeCSSValue(raw) {
+                            return "background:" + raw
+                        }
                         if raw.range(of: "url\\s*\\(", options: [.regularExpression, .caseInsensitive]) != nil {
                             if let urlStr = MailInlineImageReference.extractURLFromStyle(raw),
                                let file = MailInlineImageReference.attachment(for: urlStr, inline: inline) {
@@ -207,6 +435,7 @@ enum MailHTML {
                     }
                     guard properties.contains(property),
                           raw.range(of:"url|expression|@|\\\\|[<>]",options:[.regularExpression,.caseInsensitive]) == nil else { return nil }
+                    if property == "font", !SignatureHTML.safeCSSValue(raw) { return nil }
                     guard dark else { return property + ":" + raw }
                     switch property {
                     case "color":
@@ -222,22 +451,28 @@ enum MailHTML {
                     }
                 }.joined(separator:";")
                 if !declarations.isEmpty { attributes += " style=\"\(escape(declarations))\"" }
-            } else if tag == "a", name == "href", let url = URL(string:value), Trust.outside(url) {
+            } else if tag == "a", name == "href",
+                      let url = URL(string: value.trimmingCharacters(in: .whitespacesAndNewlines)),
+                      Trust.outside(url) {
                 attributes += " href=\"\(escape(url.absoluteString))\" rel=\"noreferrer noopener\""
             }
         }
         if ["img", "v:imagedata", "imagedata"].contains(tag) {
             let alt = element.attributes?.first(where: { $0.name?.lowercased() == "alt" })?.stringValue
             let raw = MailInlineImageReference.imageSource(from: element) ?? ""
+            let w = element.attributes?.first(where: { $0.name?.lowercased() == "width" })?.stringValue?.trimmingCharacters(in: .whitespaces)
+            let h = element.attributes?.first(where: { $0.name?.lowercased() == "height" })?.stringValue?.trimmingCharacters(in: .whitespaces)
+            let isBeacon = (w == "1" && h == "1") || (w == "0" && h == "0")
             var source:String?
             if let file = MailInlineImageReference.attachment(for: raw, alt: alt, inline: inline) { source = "mail-inline://message/\(file.id)" }
             else if raw.range(of:"^data:image/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=\\s]+$",options:[.regularExpression,.caseInsensitive]) != nil { source = raw }
             else if let cached = sessionImages[raw] { source = "data:\(MailRasterImage.mimeType(for: Data(base64Encoded:cached) ?? Data()) ?? "image/png");base64,\(cached)" }
-            else if images, !MailInlineImageReference.isProviderDisplayURL(raw), let url = URL(string:raw), url.scheme == "https", url.user == nil, url.password == nil { source = url.absoluteString }
+            else if images, !isBeacon, !MailInlineImageReference.isProviderDisplayURL(raw), let url = URL(string:raw), url.scheme == "https", url.user == nil, url.password == nil { source = url.absoluteString }
             if let source { attributes += " src=\"\(escape(source))\"" }
         }
         if ["br","hr","img"].contains(tag) { return "<\(tag)\(attributes)>" }
         if ["v:imagedata","imagedata"].contains(tag) { return "<img\(attributes)>" }
+        if tag == "a", children.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "" }
         return "<\(tag)\(attributes)>\(children)</\(tag)>"
     }
     // MARK: - Dark mode colour mapping
@@ -323,5 +558,36 @@ enum MailHTML {
         let breaks = fragment.replacingOccurrences(of:"<(br|/p|/div|/tr)[^>]*>",with:"\n",options:[.regularExpression,.caseInsensitive])
         guard let document = parsed(breaks) else { return breaks.replacingOccurrences(of:"<[^>]*>",with:"",options:.regularExpression) }
         return document.rootElement()?.stringValue ?? ""
+    }
+
+    /// Strips editor signature (data-ml-signature) and quote history (data-ml-quote) elements,
+    /// returning only the user-authored plain text (trimmed).
+    static func authoredPlainText(from html: String) -> String {
+        if let doc = try? XMLDocument(data: Data(("<root>" + html + "</root>").utf8),
+                                      options: [.documentTidyHTML, .nodeLoadExternalEntitiesNever]),
+           let root = doc.rootElement() {
+            func removeMarkedNodes(_ node: XMLNode) {
+                if let elem = node as? XMLElement {
+                    if elem.attribute(forName: "data-ml-signature") != nil ||
+                       elem.attribute(forName: "data-ml-quote") != nil {
+                        elem.detach()
+                        return
+                    }
+                }
+                for child in (node.children ?? []) {
+                    removeMarkedNodes(child)
+                }
+            }
+            removeMarkedNodes(root)
+            return (root.stringValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        var fallback = html
+        for attr in ["data-ml-signature", "data-ml-quote"] {
+            if let range = fallback.range(of: "<[^>]*" + attr, options: .regularExpression) {
+                fallback = String(fallback[..<range.lowerBound])
+            }
+        }
+        return fallback.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
